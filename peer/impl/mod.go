@@ -1,6 +1,9 @@
 package impl
 
 import (
+	"errors"
+	"time"
+
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/peer/impl/saferoutingtable"
 	"go.dedis.ch/cs438/transport"
@@ -14,13 +17,15 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	myAddr := conf.Socket.GetAddress()
 
-	routingTable := saferoutingtable.NewRoutingTable()
+	routingTable := saferoutingtable.New()
 	routingTable.SetEntry(myAddr, myAddr)
 
 	peer := node{
 		conf:         conf,
 		routingTable: routingTable,
 	}
+
+	// peer.conf.MessageRegistry.RegisterMessageCallback()
 
 	return &peer
 }
@@ -35,32 +40,65 @@ type node struct {
 	routingTable saferoutingtable.SafeRoutingTable
 }
 
+var stop chan struct{} = make(chan struct{})
+
 // Start implements peer.Service
 func (n *node) Start() error {
-	// start listening
-	// for {
-	// 	pkt, err := n.conf.Socket.Recv(0)
-	// 	if err != nil {
-	// 		return err
-	// 	}
+	// start listening asynchronously
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				pkt, err := n.conf.Socket.Recv(time.Second * 1)
+				if errors.Is(err, transport.TimeoutError(0)) {
+					continue
+				}
+				if err != nil {
+					return
+				}
 
-	// 	pkt.
-	// }
+				// do something with the pkt
+				n.conf.MessageRegistry.ProcessPacket(pkt)
+			}
+		}
+	}()
 
-	// panic("to be implemented in HW0")
 	return nil
 }
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
-	// close socket?
-	// panic("to be implemented in HW0")
+	stop <- struct{}{}
+
 	return nil
 }
 
 // Unicast implements peer.Messaging
 func (n *node) Unicast(dest string, msg transport.Message) error {
-	panic("to be implemented in HW0")
+	myAddr := n.conf.Socket.GetAddress()
+
+	// make header
+	header := transport.NewHeader(
+		myAddr,
+		myAddr,
+		dest,
+		0,
+	)
+
+	// make packet
+	pkt := transport.Packet{
+		Header: &header,
+		Msg:    &msg,
+	}
+
+	// send to destination
+	err := n.conf.Socket.Send(dest, pkt, 0)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // AddPeer implements peer.Service
@@ -77,5 +115,17 @@ func (n *node) GetRoutingTable() peer.RoutingTable {
 
 // SetRoutingEntry implements peer.Service
 func (n *node) SetRoutingEntry(origin, relayAddr string) {
-	n.routingTable.SetEntry(origin, relayAddr)
+	// should a node be able to change its own entry?
+	// probably not, but only after it has been set once!
+	// that first time is essential
+	// if origin == n.conf.Socket.GetAddress() {
+	// 	return
+	// }
+
+	// remove element if it points nowhere
+	if relayAddr == "" {
+		n.routingTable.RemoveEntry(origin)
+	} else {
+		n.routingTable.SetEntry(origin, relayAddr)
+	}
 }

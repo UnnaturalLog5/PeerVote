@@ -134,7 +134,7 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 		return transport.Packet{}, err
 	}
 
-	s.outsPackets.append(pkt)
+	s.insPackets.append(pkt)
 
 	return pkt, nil
 }
