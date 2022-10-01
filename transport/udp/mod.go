@@ -76,18 +76,29 @@ func (s *Socket) Close() error {
 
 // Send implements transport.Socket
 func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) error {
+	// Set deadline for timeouts > 0
+	if timeout > 0 {
+		err := s.udpConn.SetWriteDeadline(time.Now().Add(timeout))
+		if err != nil {
+			return err
+		}
+	}
+
 	data, err := pkt.Marshal()
 	if err != nil {
 		return err
 	}
 
+	// resolve UDP addr from address string "dest"
 	destAddr, err := net.ResolveUDPAddr("udp", dest)
 	if err != nil {
 		return err
 	}
 
 	_, err = s.udpConn.WriteToUDP(data, destAddr)
-	if err != nil {
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return transport.TimeoutError(0)
+	} else if err != nil {
 		return err
 	}
 
