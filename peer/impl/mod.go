@@ -2,6 +2,7 @@ package impl
 
 import (
 	"go.dedis.ch/cs438/peer"
+	"go.dedis.ch/cs438/peer/impl/saferoutingtable"
 	"go.dedis.ch/cs438/transport"
 )
 
@@ -10,7 +11,18 @@ import (
 func NewPeer(conf peer.Configuration) peer.Peer {
 	// here you must return a struct that implements the peer.Peer functions.
 	// Therefore, you are free to rename and change it as you want.
-	return &node{}
+
+	myAddr := conf.Socket.GetAddress()
+
+	routingTable := saferoutingtable.NewRoutingTable()
+	routingTable.SetEntry(myAddr, myAddr)
+
+	peer := node{
+		conf:         conf,
+		routingTable: routingTable,
+	}
+
+	return &peer
 }
 
 // node implements a peer to build a Peerster system
@@ -19,17 +31,31 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 type node struct {
 	peer.Peer
 	// You probably want to keep the peer.Configuration on this struct:
-	//conf peer.Configuration
+	conf         peer.Configuration
+	routingTable saferoutingtable.SafeRoutingTable
 }
 
 // Start implements peer.Service
 func (n *node) Start() error {
-	panic("to be implemented in HW0")
+	// start listening
+	// for {
+	// 	pkt, err := n.conf.Socket.Recv(0)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+
+	// 	pkt.
+	// }
+
+	// panic("to be implemented in HW0")
+	return nil
 }
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
-	panic("to be implemented in HW0")
+	// close socket?
+	// panic("to be implemented in HW0")
+	return nil
 }
 
 // Unicast implements peer.Messaging
@@ -39,15 +65,17 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 
 // AddPeer implements peer.Service
 func (n *node) AddPeer(addr ...string) {
-	panic("to be implemented in HW0")
+	for _, newAddr := range addr {
+		n.routingTable.SetEntry(newAddr, newAddr)
+	}
 }
 
 // GetRoutingTable implements peer.Service
 func (n *node) GetRoutingTable() peer.RoutingTable {
-	panic("to be implemented in HW0")
+	return n.routingTable.GetRoutingTable()
 }
 
 // SetRoutingEntry implements peer.Service
 func (n *node) SetRoutingEntry(origin, relayAddr string) {
-	panic("to be implemented in HW0")
+	n.routingTable.SetEntry(origin, relayAddr)
 }
