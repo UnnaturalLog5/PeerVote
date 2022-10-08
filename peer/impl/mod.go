@@ -4,9 +4,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
+	"go.dedis.ch/cs438/peer/impl/handler"
 	"go.dedis.ch/cs438/peer/impl/saferoutingtable"
 	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 )
 
 // NewPeer creates a new peer. You can change the content and location of this
@@ -23,9 +26,11 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	peer := node{
 		conf:         conf,
 		routingTable: routingTable,
+		stop:         make(chan struct{}),
 	}
 
-	// peer.conf.MessageRegistry.RegisterMessageCallback()
+	// register Callbacks
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, handler.ChatMessage)
 
 	return &peer
 }
@@ -38,29 +43,24 @@ type node struct {
 	// You probably want to keep the peer.Configuration on this struct:
 	conf         peer.Configuration
 	routingTable saferoutingtable.SafeRoutingTable
+	stop         chan struct{}
 }
-
-var stop chan struct{} = make(chan struct{})
 
 // Start implements peer.Service
 func (n *node) Start() error {
 	// start listening asynchronously
 	go func() {
+		log.Info().Msg("peer started listening")
+
 		for {
 			select {
-			case <-stop:
+			case <-n.stop:
 				return
 			default:
-				pkt, err := n.conf.Socket.Recv(time.Second * 1)
-				if errors.Is(err, transport.TimeoutError(0)) {
-					continue
-				}
+				err := n.receive()
 				if err != nil {
-					return
+					log.Err(err).Msg("error receiving packet")
 				}
-
-				// do something with the pkt
-				n.conf.MessageRegistry.ProcessPacket(pkt)
 			}
 		}
 	}()
@@ -70,8 +70,9 @@ func (n *node) Start() error {
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
-	stop <- struct{}{}
+	n.stop <- struct{}{}
 
+	log.Info().Msg("peer is shutting down")
 	return nil
 }
 
@@ -87,17 +88,82 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 		0,
 	)
 
+	// log.Info().Msg(string(msg.Payload))
+	// test, _ := msg.Payload.MarshalJSON()
+	// log.Info().Msg(string(test))
+	// log.Info().Msg(string(msg.Payload))
+
 	// make packet
 	pkt := transport.Packet{
 		Header: &header,
 		Msg:    &msg,
 	}
 
-	// send to destination
-	err := n.conf.Socket.Send(dest, pkt, 0)
+	err := n.route(dest, pkt)
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+// receive packet
+func (n *node) receive() error {
+	pkt, err := n.conf.Socket.Recv(time.Second * 1)
+	if errors.Is(err, transport.TimeoutError(0)) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	// forward packet if it's not meant for this node
+	myAddr := n.conf.Socket.GetAddress()
+	if pkt.Header.Destination != myAddr {
+		err := n.forward(pkt.Header.Destination, pkt)
+		if err != nil {
+			return err
+		}
+	}
+
+	// do something with the pkt
+	err = n.conf.MessageRegistry.ProcessPacket(pkt)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// forward packet
+func (n *node) forward(dest string, pkt transport.Packet) error {
+	relayPkt := pkt.Copy()
+
+	myAddr := n.conf.Socket.GetAddress()
+	relayPkt.Header.RelayedBy = myAddr
+
+	err := n.route(dest, relayPkt)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// routes a transport.Packet to its destination
+func (n *node) route(dest string, pkt transport.Packet) error {
+	// get address to which to relay to
+	relayAddr := n.routingTable.GetEntry(dest)
+	if relayAddr == "" {
+		return errors.New("node with address %v cannot be found in routing table")
+	}
+
+	// send to destination
+	err := n.conf.Socket.Send(relayAddr, pkt, 0)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
