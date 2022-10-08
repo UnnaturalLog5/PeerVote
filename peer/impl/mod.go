@@ -15,12 +15,11 @@ import (
 // NewPeer creates a new peer. You can change the content and location of this
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
-	// here you must return a struct that implements the peer.Peer functions.
-	// Therefore, you are free to rename and change it as you want.
-
-	myAddr := conf.Socket.GetAddress()
-
 	routingTable := saferoutingtable.New()
+
+	// set routing entry for own address
+	// use routingTable directly as n.routingTable.SetEntry() prevents overwriting the node's own address
+	myAddr := conf.Socket.GetAddress()
 	routingTable.SetEntry(myAddr, myAddr)
 
 	peer := node{
@@ -43,7 +42,10 @@ type node struct {
 	// You probably want to keep the peer.Configuration on this struct:
 	conf         peer.Configuration
 	routingTable saferoutingtable.SafeRoutingTable
-	stop         chan struct{}
+
+	// sending a message on this channel will stop the node after it has been started
+	// TODO what happens when stop is called before start?
+	stop chan struct{}
 }
 
 // Start implements peer.Service
@@ -88,17 +90,13 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 		0,
 	)
 
-	// log.Info().Msg(string(msg.Payload))
-	// test, _ := msg.Payload.MarshalJSON()
-	// log.Info().Msg(string(test))
-	// log.Info().Msg(string(msg.Payload))
-
-	// make packet
+	// assemble packet
 	pkt := transport.Packet{
 		Header: &header,
 		Msg:    &msg,
 	}
 
+	// send off packet
 	err := n.route(dest, pkt)
 	if err != nil {
 		return err
@@ -120,15 +118,23 @@ func (n *node) receive() error {
 	// forward packet if it's not meant for this node
 	myAddr := n.conf.Socket.GetAddress()
 	if pkt.Header.Destination != myAddr {
+		log.Info().Msgf("forwarded packet meant for peer %v", pkt.Header.Destination)
+
 		err := n.forward(pkt.Header.Destination, pkt)
 		if err != nil {
 			return err
 		}
+
+		return nil
 	}
 
+	// n.conf.MessageRegistry.UnmarshalMessage()
+
 	// do something with the pkt
+	log.Info().Msgf("received packet")
 	err = n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
+		log.Err(err)
 		return err
 	}
 
@@ -139,9 +145,11 @@ func (n *node) receive() error {
 func (n *node) forward(dest string, pkt transport.Packet) error {
 	relayPkt := pkt.Copy()
 
+	// update packet header with this peer's address
 	myAddr := n.conf.Socket.GetAddress()
 	relayPkt.Header.RelayedBy = myAddr
 
+	// send off packet
 	err := n.route(dest, relayPkt)
 	if err != nil {
 		return err
@@ -184,9 +192,9 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 	// should a node be able to change its own entry?
 	// probably not, but only after it has been set once!
 	// that first time is essential
-	// if origin == n.conf.Socket.GetAddress() {
-	// 	return
-	// }
+	if origin == n.conf.Socket.GetAddress() {
+		return
+	}
 
 	// remove element if it points nowhere
 	if relayAddr == "" {

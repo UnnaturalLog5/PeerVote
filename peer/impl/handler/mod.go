@@ -6,15 +6,9 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-// implements registry.Exec
+// is type of registry.Exec
 func ChatMessage(t types.Message, pkt transport.Packet) error {
-	data := make([]byte, 1)
-	err := pkt.Msg.Payload.UnmarshalJSON(data)
-	if err != nil {
-		return err
-	}
-
-	log.Info().Msgf("%v", data)
+	log.Info().Msgf("received message: '%v'", string(pkt.Msg.Payload))
 
 	return nil
 }
