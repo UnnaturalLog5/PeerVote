@@ -44,7 +44,6 @@ type node struct {
 	routingTable saferoutingtable.SafeRoutingTable
 
 	// sending a message on this channel will stop the node after it has been started
-	// TODO what happens when stop is called before start?
 	stop chan struct{}
 }
 
@@ -59,9 +58,17 @@ func (n *node) Start() error {
 			case <-n.stop:
 				return
 			default:
-				err := n.receive()
+				pkt, err := n.conf.Socket.Recv(time.Second * 1)
+				if errors.Is(err, transport.TimeoutError(0)) {
+					continue
+				}
 				if err != nil {
 					log.Err(err).Msg("error receiving packet")
+				}
+
+				err = n.handlePacket(pkt)
+				if err != nil {
+					log.Err(err).Msg("error handling packet")
 				}
 			}
 		}
@@ -106,15 +113,7 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 }
 
 // receive packet
-func (n *node) receive() error {
-	pkt, err := n.conf.Socket.Recv(time.Second * 1)
-	if errors.Is(err, transport.TimeoutError(0)) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
+func (n *node) handlePacket(pkt transport.Packet) error {
 	// forward packet if it's not meant for this node
 	myAddr := n.conf.Socket.GetAddress()
 	if pkt.Header.Destination != myAddr {
@@ -128,13 +127,10 @@ func (n *node) receive() error {
 		return nil
 	}
 
-	// n.conf.MessageRegistry.UnmarshalMessage()
-
 	// do something with the pkt
 	log.Info().Msgf("received packet")
-	err = n.conf.MessageRegistry.ProcessPacket(pkt)
+	err := n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
-		log.Err(err)
 		return err
 	}
 
