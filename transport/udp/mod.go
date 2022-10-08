@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net"
 	"os"
-	"sync"
 	"time"
 
 	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/transport/udp/packetstore"
 )
 
 const bufSize = 65000
@@ -35,28 +35,15 @@ func (n *UDP) CreateSocket(address string) (transport.ClosableSocket, error) {
 		return nil, err
 	}
 
+	insPackets := packetstore.New()
+	outsPackets := packetstore.New()
+
 	socket := Socket{
-		udpConn: udpConn,
+		udpConn:     udpConn,
+		insPackets:  insPackets,
+		outsPackets: outsPackets,
 	}
 	return &socket, nil
-}
-
-type packetStore struct {
-	sync.RWMutex
-	items []transport.Packet
-}
-
-func (p *packetStore) append(pkt transport.Packet) {
-	p.Lock()
-	defer p.Unlock()
-	p.items = append(p.items, pkt)
-}
-
-func (p *packetStore) get() []transport.Packet {
-	p.RLock()
-	defer p.RUnlock()
-
-	return p.items
 }
 
 // Socket implements a network socket using UDP.
@@ -65,8 +52,8 @@ func (p *packetStore) get() []transport.Packet {
 // - implements transport.ClosableSocket
 type Socket struct {
 	udpConn     *net.UDPConn
-	insPackets  packetStore
-	outsPackets packetStore
+	insPackets  packetstore.PacketStore
+	outsPackets packetstore.PacketStore
 }
 
 // Close implements transport.Socket. It returns an error if already closed.
@@ -102,7 +89,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 		return err
 	}
 
-	s.outsPackets.append(pkt)
+	s.outsPackets.Append(pkt)
 
 	return nil
 }
@@ -134,7 +121,7 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 		return transport.Packet{}, err
 	}
 
-	s.insPackets.append(pkt)
+	s.insPackets.Append(pkt)
 
 	return pkt, nil
 }
@@ -148,10 +135,10 @@ func (s *Socket) GetAddress() string {
 
 // GetIns implements transport.Socket
 func (s *Socket) GetIns() []transport.Packet {
-	return s.insPackets.get()
+	return s.insPackets.Get()
 }
 
 // GetOuts implements transport.Socket
 func (s *Socket) GetOuts() []transport.Packet {
-	return s.outsPackets.get()
+	return s.outsPackets.Get()
 }
