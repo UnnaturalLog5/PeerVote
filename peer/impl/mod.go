@@ -64,12 +64,11 @@ func (n *node) Start() error {
 				}
 				if err != nil {
 					log.Err(err).Msg("error receiving packet")
+					continue
 				}
 
-				err = n.handlePacket(pkt)
-				if err != nil {
-					log.Err(err).Msg("error handling packet")
-				}
+				// asynchronously handle packet
+				go n.handlePacket(pkt)
 			}
 		}
 	}()
@@ -113,7 +112,7 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 }
 
 // receive packet
-func (n *node) handlePacket(pkt transport.Packet) error {
+func (n *node) handlePacket(pkt transport.Packet) {
 	// forward packet if it's not meant for this node
 	myAddr := n.conf.Socket.GetAddress()
 	if pkt.Header.Destination != myAddr {
@@ -121,20 +120,20 @@ func (n *node) handlePacket(pkt transport.Packet) error {
 
 		err := n.forward(pkt.Header.Destination, pkt)
 		if err != nil {
-			return err
+			log.Err(err).Msg("error handling packet")
+			return
 		}
 
-		return nil
+		return
 	}
 
 	// do something with the pkt
 	log.Info().Msgf("received packet")
 	err := n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
-		return err
+		log.Err(err).Msg("error handling packet")
+		return
 	}
-
-	return nil
 }
 
 // forward packet
