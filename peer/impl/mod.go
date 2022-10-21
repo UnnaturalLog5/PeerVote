@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -22,10 +23,13 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	myAddr := conf.Socket.GetAddress()
 	routingTable.SetEntry(myAddr, myAddr)
 
+	stop := make(chan struct{})
+
 	peer := node{
 		conf:         conf,
 		routingTable: routingTable,
-		stop:         make(chan struct{}),
+		stop:         stop,
+		myAddr:       myAddr,
 	}
 
 	// register Callbacks
@@ -45,6 +49,8 @@ type node struct {
 
 	// sending a message on this channel will stop the node after it has been started
 	stop chan struct{}
+
+	myAddr string
 }
 
 // Start implements peer.Service
@@ -86,12 +92,10 @@ func (n *node) Stop() error {
 
 // Unicast implements peer.Messaging
 func (n *node) Unicast(dest string, msg transport.Message) error {
-	myAddr := n.conf.Socket.GetAddress()
-
 	// make header
 	header := transport.NewHeader(
-		myAddr,
-		myAddr,
+		n.myAddr,
+		n.myAddr,
 		dest,
 		0,
 	)
@@ -104,6 +108,56 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 
 	// send off packet
 	err := n.route(dest, pkt)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Broadcast implements peer.Messaging
+func (n *node) Broadcast(msg transport.Message) error {
+	// create rumor
+	rumor := types.Rumor{
+		Origin:   n.myAddr,
+		Sequence: 0,
+		Msg:      &msg,
+	}
+
+	rumors := []types.Rumor{rumor}
+
+	rumorsMessage := types.RumorsMessage{Rumors: rumors}
+
+	data, err := json.Marshal(rumorsMessage)
+	if err != nil {
+		return err
+	}
+
+	rumorsTransportMessage := transport.Message{
+		Type:    rumorsMessage.Name(),
+		Payload: data,
+	}
+
+	// send to random neighbor
+	randomNeighborAddr := n.routingTable.GetRandomNeighbor(n.myAddr)
+
+	// make header
+	header := transport.NewHeader(
+		n.myAddr,
+		n.myAddr,
+		randomNeighborAddr,
+		0,
+	)
+
+	pkt := transport.Packet{
+		Header: &header,
+		Msg:    &rumorsTransportMessage,
+	}
+
+	// process locally
+	n.route(randomNeighborAddr, pkt)
+
+	err = n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
 		return err
 	}
@@ -141,8 +195,7 @@ func (n *node) forward(dest string, pkt transport.Packet) error {
 	relayPkt := pkt.Copy()
 
 	// update packet header with this peer's address
-	myAddr := n.conf.Socket.GetAddress()
-	relayPkt.Header.RelayedBy = myAddr
+	relayPkt.Header.RelayedBy = n.myAddr
 
 	// send off packet
 	err := n.route(dest, relayPkt)
