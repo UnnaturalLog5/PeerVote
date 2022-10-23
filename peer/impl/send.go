@@ -93,6 +93,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 	pkt, err := n.sendRumors(randomNeighborAddr, rumors)
 	if err != nil {
 		log.Err(err).Str("peerAddr", n.myAddr).Msg("could not send broadcast")
+		return nil
 	}
 
 	if n.conf.AckTimeout > 0 {
