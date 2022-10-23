@@ -1,39 +1,95 @@
 package impl
 
 import (
-	"encoding/json"
-	"errors"
+	"math/rand"
+	"os"
+	"strconv"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
-	"go.dedis.ch/cs438/peer/impl/handler"
 	"go.dedis.ch/cs438/peer/impl/saferoutingtable"
-	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/peer/impl/saferumorstore"
+	"go.dedis.ch/cs438/peer/impl/safesequencestore"
 	"go.dedis.ch/cs438/types"
 )
+
+var (
+	// defaultLevel can be changed to set the desired level of the logger
+	defaultLevel = zerolog.InfoLevel
+
+	// logout is the logger configuration
+	logout = zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: time.RFC3339,
+	}
+)
+
+func init() {
+	zerolog.CallerMarshalFunc = func(file string, line int) string {
+		short := file
+		for i := len(file) - 1; i > 0; i-- {
+			if file[i] == '/' {
+				short = file[i+1:]
+				break
+			}
+		}
+		file = short
+		return file + ":" + strconv.Itoa(line)
+	}
+
+	log.Logger = zerolog.New(logout).
+		Level(defaultLevel).
+		With().
+		Timestamp().
+		Caller().
+		Logger()
+}
 
 // NewPeer creates a new peer. You can change the content and location of this
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
+	log.Info()
+
+	// seed once when we start the peer for all following pseudo-random operations
+	rand.Seed(time.Now().UnixNano())
+
 	routingTable := saferoutingtable.New()
+	sequenceStore := safesequencestore.New()
 
 	// set routing entry for own address
 	// use routingTable directly as n.routingTable.SetEntry() prevents overwriting the node's own address
 	myAddr := conf.Socket.GetAddress()
 	routingTable.SetEntry(myAddr, myAddr)
 
-	stop := make(chan struct{})
+	stopPeer := make(chan struct{})
+	stopStatusTicker := make(chan struct{})
+	stopHeartbeatTicker := make(chan struct{})
+
+	rumorStore := saferumorstore.New()
 
 	peer := node{
-		conf:         conf,
-		routingTable: routingTable,
-		stop:         stop,
-		myAddr:       myAddr,
+		conf:                conf,
+		routingTable:        routingTable,
+		sequenceStore:       sequenceStore,
+		stopPeer:            stopPeer,
+		stopStatusTicker:    stopStatusTicker,
+		myAddr:              myAddr,
+		rumorStore:          rumorStore,
+		stopHeartbeatTicker: stopHeartbeatTicker,
 	}
 
 	// register Callbacks
-	peer.conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, handler.ChatMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, peer.HandleChatMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, peer.HandleRumorsMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, peer.HandleAckMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.StatusMessage{}, peer.HandleStatusMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, peer.HandlePrivateMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, peer.HandleEmptyMessage)
+
+	// start timer for status messages
+	// sends status messages at interval
 
 	return &peer
 }
@@ -43,211 +99,20 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 // - implements peer.Peer
 type node struct {
 	peer.Peer
-	// You probably want to keep the peer.Configuration on this struct:
-	conf         peer.Configuration
-	routingTable saferoutingtable.SafeRoutingTable
-
 	// sending a message on this channel will stop the node after it has been started
-	stop chan struct{}
+	stopPeer chan struct{}
+
+	conf          peer.Configuration
+	routingTable  saferoutingtable.SafeRoutingTable
+	sequenceStore safesequencestore.SafeSequenceStore
+
+	rumorStore saferumorstore.SafeRumorStore
+
+	statusTicker     *time.Ticker
+	stopStatusTicker chan struct{}
+
+	heartbeatTicker     *time.Ticker
+	stopHeartbeatTicker chan struct{}
 
 	myAddr string
-}
-
-// Start implements peer.Service
-func (n *node) Start() error {
-	// start listening asynchronously
-	go func() {
-		log.Info().Msg("peer started listening")
-
-		for {
-			select {
-			case <-n.stop:
-				return
-			default:
-				pkt, err := n.conf.Socket.Recv(time.Second * 1)
-				if errors.Is(err, transport.TimeoutError(0)) {
-					continue
-				}
-				if err != nil {
-					log.Err(err).Msg("error receiving packet")
-					continue
-				}
-
-				// asynchronously handle packet
-				go n.handlePacket(pkt)
-			}
-		}
-	}()
-
-	return nil
-}
-
-// Stop implements peer.Service
-func (n *node) Stop() error {
-	n.stop <- struct{}{}
-
-	log.Info().Msg("peer is shutting down")
-	return nil
-}
-
-// Unicast implements peer.Messaging
-func (n *node) Unicast(dest string, msg transport.Message) error {
-	// make header
-	header := transport.NewHeader(
-		n.myAddr,
-		n.myAddr,
-		dest,
-		0,
-	)
-
-	// assemble packet
-	pkt := transport.Packet{
-		Header: &header,
-		Msg:    &msg,
-	}
-
-	// send off packet
-	err := n.route(dest, pkt)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Broadcast implements peer.Messaging
-func (n *node) Broadcast(msg transport.Message) error {
-	// create rumor
-	rumor := types.Rumor{
-		Origin:   n.myAddr,
-		Sequence: 0,
-		Msg:      &msg,
-	}
-
-	rumors := []types.Rumor{rumor}
-
-	rumorsMessage := types.RumorsMessage{Rumors: rumors}
-
-	data, err := json.Marshal(rumorsMessage)
-	if err != nil {
-		return err
-	}
-
-	rumorsTransportMessage := transport.Message{
-		Type:    rumorsMessage.Name(),
-		Payload: data,
-	}
-
-	// send to random neighbor
-	randomNeighborAddr := n.routingTable.GetRandomNeighbor(n.myAddr)
-
-	// make header
-	header := transport.NewHeader(
-		n.myAddr,
-		n.myAddr,
-		randomNeighborAddr,
-		0,
-	)
-
-	pkt := transport.Packet{
-		Header: &header,
-		Msg:    &rumorsTransportMessage,
-	}
-
-	// process locally
-	n.route(randomNeighborAddr, pkt)
-
-	err = n.conf.MessageRegistry.ProcessPacket(pkt)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// receive packet
-func (n *node) handlePacket(pkt transport.Packet) {
-	// forward packet if it's not meant for this node
-	myAddr := n.conf.Socket.GetAddress()
-	if pkt.Header.Destination != myAddr {
-		log.Info().Msgf("forwarded packet meant for peer %v", pkt.Header.Destination)
-
-		err := n.forward(pkt.Header.Destination, pkt)
-		if err != nil {
-			log.Err(err).Msg("error handling packet")
-			return
-		}
-
-		return
-	}
-
-	// do something with the pkt
-	log.Info().Msgf("received packet")
-	err := n.conf.MessageRegistry.ProcessPacket(pkt)
-	if err != nil {
-		log.Err(err).Msg("error handling packet")
-		return
-	}
-}
-
-// forward packet
-func (n *node) forward(dest string, pkt transport.Packet) error {
-	relayPkt := pkt.Copy()
-
-	// update packet header with this peer's address
-	relayPkt.Header.RelayedBy = n.myAddr
-
-	// send off packet
-	err := n.route(dest, relayPkt)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// routes a transport.Packet to its destination
-func (n *node) route(dest string, pkt transport.Packet) error {
-	// get address to which to relay to
-	relayAddr := n.routingTable.GetEntry(dest)
-	if relayAddr == "" {
-		return errors.New("node with address %v cannot be found in routing table")
-	}
-
-	// send to destination
-	err := n.conf.Socket.Send(relayAddr, pkt, 0)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// AddPeer implements peer.Service
-func (n *node) AddPeer(addr ...string) {
-	for _, newAddr := range addr {
-		n.routingTable.SetEntry(newAddr, newAddr)
-	}
-}
-
-// GetRoutingTable implements peer.Service
-func (n *node) GetRoutingTable() peer.RoutingTable {
-	return n.routingTable.GetRoutingTable()
-}
-
-// SetRoutingEntry implements peer.Service
-func (n *node) SetRoutingEntry(origin, relayAddr string) {
-	// should a node be able to change its own entry?
-	// probably not, but only after it has been set once!
-	// that first time is essential
-	if origin == n.conf.Socket.GetAddress() {
-		return
-	}
-
-	// remove element if it points nowhere
-	if relayAddr == "" {
-		n.routingTable.RemoveEntry(origin)
-	} else {
-		n.routingTable.SetEntry(origin, relayAddr)
-	}
 }
