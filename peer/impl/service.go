@@ -41,12 +41,12 @@ func (n *node) sendStatusMessageLoop() {
 				return
 			case <-n.statusTicker.C:
 				// send status message
-				log.Info().Str("peerAddr", n.myAddr).Msg("Send statusMessage")
+				// log.Info().Str("peerAddr", n.myAddr).Msg("Send statusMessage")
 
 				// TODO send status message
 				err := n.sendStatusMessage("")
 				if err != nil {
-					log.Err(err).Str("peerAddr", n.myAddr).Msg("error sending status message")
+					log.Warn().Str("peerAddr", n.myAddr).Msg("did not send status message")
 				}
 			}
 		}
@@ -86,6 +86,7 @@ func (n *node) Start() error {
 		go n.sendStatusMessageLoop()
 	}
 
+	// regularly send heartbeat
 	if n.conf.HeartbeatInterval > 0 {
 		n.heartbeatTicker = time.NewTicker(n.conf.HeartbeatInterval)
 		go n.sendHeartbeatLoop()
@@ -96,6 +97,8 @@ func (n *node) Start() error {
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
+	// properly close all timers and channels
+
 	if n.conf.AntiEntropyInterval > 0 {
 		n.stopStatusTicker <- struct{}{}
 		close(n.stopStatusTicker)

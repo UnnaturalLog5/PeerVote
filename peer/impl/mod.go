@@ -9,9 +9,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
-	"go.dedis.ch/cs438/peer/impl/saferoutingtable"
-	"go.dedis.ch/cs438/peer/impl/saferumorstore"
-	"go.dedis.ch/cs438/peer/impl/safesequencestore"
+	"go.dedis.ch/cs438/peer/impl/acktimers"
+	"go.dedis.ch/cs438/peer/impl/routingtable"
+	"go.dedis.ch/cs438/peer/impl/rumorstore"
 	"go.dedis.ch/cs438/types"
 )
 
@@ -55,8 +55,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	// seed once when we start the peer for all following pseudo-random operations
 	rand.Seed(time.Now().UnixNano())
 
-	routingTable := saferoutingtable.New()
-	sequenceStore := safesequencestore.New()
+	routingTable := routingtable.New()
 
 	// set routing entry for own address
 	// use routingTable directly as n.routingTable.SetEntry() prevents overwriting the node's own address
@@ -67,17 +66,19 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	stopStatusTicker := make(chan struct{})
 	stopHeartbeatTicker := make(chan struct{})
 
-	rumorStore := saferumorstore.New()
+	rumorStore := rumorstore.New()
+
+	ackTimers := acktimers.New()
 
 	peer := node{
 		conf:                conf,
 		routingTable:        routingTable,
-		sequenceStore:       sequenceStore,
 		stopPeer:            stopPeer,
 		stopStatusTicker:    stopStatusTicker,
 		myAddr:              myAddr,
 		rumorStore:          rumorStore,
 		stopHeartbeatTicker: stopHeartbeatTicker,
+		ackTimers:           ackTimers,
 	}
 
 	// register Callbacks
@@ -87,9 +88,6 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.StatusMessage{}, peer.HandleStatusMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, peer.HandlePrivateMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, peer.HandleEmptyMessage)
-
-	// start timer for status messages
-	// sends status messages at interval
 
 	return &peer
 }
@@ -102,11 +100,10 @@ type node struct {
 	// sending a message on this channel will stop the node after it has been started
 	stopPeer chan struct{}
 
-	conf          peer.Configuration
-	routingTable  saferoutingtable.SafeRoutingTable
-	sequenceStore safesequencestore.SafeSequenceStore
+	conf         peer.Configuration
+	routingTable routingtable.RoutingTable
 
-	rumorStore saferumorstore.SafeRumorStore
+	rumorStore rumorstore.RumorStore
 
 	statusTicker     *time.Ticker
 	stopStatusTicker chan struct{}
@@ -115,4 +112,7 @@ type node struct {
 	stopHeartbeatTicker chan struct{}
 
 	myAddr string
+
+	// maps from packet ID to timer
+	ackTimers acktimers.AckTimers
 }

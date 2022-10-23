@@ -1,4 +1,4 @@
-package saferoutingtable
+package routingtable
 
 import (
 	"errors"
@@ -8,7 +8,7 @@ import (
 	"go.dedis.ch/cs438/peer"
 )
 
-type SafeRoutingTable interface {
+type RoutingTable interface {
 	// Set an entry of the routing table
 	// but only of origin is not already a neighbor
 	SetEntry(origin, relayAddr string)
@@ -22,27 +22,26 @@ type SafeRoutingTable interface {
 	// Get a copy of the underlying routingTable
 	GetRoutingTable() peer.RoutingTable
 
-	// Gets a random neighbor
+	// Gets a random neighbor except those peers that are passed in
+	// returns an error, when no neighbor can be found
 	GetRandomNeighbor(forbiddenPeers ...string) (string, error)
 }
 
-type safeRoutingTable struct {
+type routingTable struct {
 	sync.RWMutex
 	routingTable peer.RoutingTable
 }
 
-func New() SafeRoutingTable {
-	routingTable := make(peer.RoutingTable)
+func New() RoutingTable {
+	innerRoutingTable := make(peer.RoutingTable)
 
-	safeRoutingTable := safeRoutingTable{
-		routingTable: routingTable,
+	return &routingTable{
+		routingTable: innerRoutingTable,
 	}
-
-	return &safeRoutingTable
 }
 
-// Implements SafeRoutingTable
-func (r *safeRoutingTable) SetEntry(origin, relayAddr string) {
+// Implements RoutingTable
+func (r *routingTable) SetEntry(origin, relayAddr string) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -52,22 +51,22 @@ func (r *safeRoutingTable) SetEntry(origin, relayAddr string) {
 	}
 }
 
-// Implements SafeRoutingTable
-func (r *safeRoutingTable) GetEntry(origin string) string {
+// Implements RoutingTable
+func (r *routingTable) GetEntry(origin string) string {
 	r.RLock()
 	defer r.RUnlock()
 	return r.routingTable[origin]
 }
 
-// Implements SafeRoutingTable
-func (r *safeRoutingTable) RemoveEntry(origin string) {
+// Implements RoutingTable
+func (r *routingTable) RemoveEntry(origin string) {
 	r.Lock()
 	defer r.Unlock()
 	delete(r.routingTable, origin)
 }
 
-// Implements SafeRoutingTable
-func (r *safeRoutingTable) GetRoutingTable() peer.RoutingTable {
+// Implements RoutingTable
+func (r *routingTable) GetRoutingTable() peer.RoutingTable {
 	routingTableCopy := make(peer.RoutingTable)
 
 	for k, v := range r.routingTable {
@@ -78,7 +77,7 @@ func (r *safeRoutingTable) GetRoutingTable() peer.RoutingTable {
 }
 
 // Gets a random neighbor that is not the address passed
-func (r *safeRoutingTable) GetRandomNeighbor(forbiddenPeers ...string) (string, error) {
+func (r *routingTable) GetRandomNeighbor(forbiddenPeers ...string) (string, error) {
 	r.RLock()
 	defer r.RUnlock()
 
@@ -94,7 +93,7 @@ func (r *safeRoutingTable) GetRandomNeighbor(forbiddenPeers ...string) (string, 
 }
 
 // gets a list of neighbors without forbiddenPeers
-func (r *safeRoutingTable) getNeighborsList(forbiddenPeers ...string) []string {
+func (r *routingTable) getNeighborsList(forbiddenPeers ...string) []string {
 	r.RLock()
 	defer r.RUnlock()
 

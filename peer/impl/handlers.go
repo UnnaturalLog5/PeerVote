@@ -2,7 +2,6 @@ package impl
 
 import (
 	"encoding/json"
-	"errors"
 	"math/rand"
 
 	"github.com/rs/zerolog/log"
@@ -34,36 +33,34 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 		return err
 	}
 
-	// set forward to true if there is a rumor we expect
+	// set forward to true if there is a rumor we expected
 	forward := false
 	for _, rumor := range rumorsMessage.Rumors {
-		currentSeq := n.sequenceStore.Get(rumor.Origin)
-
 		// update routing, but not if neighbor already
 		n.routingTable.SetEntry(rumor.Origin, pkt.Header.RelayedBy)
 
 		// is rumor expected?
-		// the first expected rumor breaks
-		if rumor.Sequence == currentSeq+1 {
-			forward = true
+		// Store only works if the rumor is expected, otherwise an error is passed
+		err = n.rumorStore.Store(rumor)
+		if err != nil {
+			// rumor was unexpected -> skip processing
+			continue
+		}
 
-			n.sequenceStore.Increment(rumor.Origin)
+		forward = true
 
-			// store this rumor
-			n.rumorStore.Store(rumor.Origin, rumor)
+		// store this rumor
 
-			// process rumor
-			rumorPkt := transport.Packet{
-				Header: pkt.Header,
-				Msg:    rumor.Msg,
-			}
+		// process rumor
+		rumorPkt := transport.Packet{
+			Header: pkt.Header,
+			Msg:    rumor.Msg,
+		}
 
-			err := n.conf.MessageRegistry.ProcessPacket(rumorPkt)
+		err := n.conf.MessageRegistry.ProcessPacket(rumorPkt)
+		if err != nil {
 			// TODO handle err
-			if err != nil {
-				// TODO
-				return err
-			}
+			return err
 		}
 	}
 
@@ -71,9 +68,10 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 		randomNeighborAddr, err := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Source)
 
 		if err != nil {
-			log.Warn().Str("peerAddr", n.myAddr).Msg("could not forward rumor, there is no more neighbor")
+			log.Info().Str("peerAddr", n.myAddr).Msg("could not forward rumor, there is no more neighbor")
 		} else {
-			err = n.sendRumors(randomNeighborAddr, rumorsMessage.Rumors)
+			log.Info().Str("peerAddr", n.myAddr).Msgf("forwarding rumor to %v", randomNeighborAddr)
+			_, err = n.sendRumors(randomNeighborAddr, rumorsMessage.Rumors)
 			if err != nil {
 				// TODO handle err
 				return err
@@ -88,7 +86,29 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 // is type of registry.Exec
 func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling ack from %v", pkt.Header.Source)
-	// handle status
+
+	// process rumor
+	ackMessage := types.AckMessage{}
+	// TODO capsule unmarshaling msgs
+	err := json.Unmarshal(pkt.Msg.Payload, &ackMessage)
+	if err != nil {
+		// TODO
+		return err
+	}
+
+	// if this ack was expected, clean up timer
+	pktId := ackMessage.AckedPacketID
+	ok := n.ackTimers.Stop(pktId)
+	if ok {
+		// stopped an active timer
+		log.Info().Str("peerAddr", n.myAddr).Msgf("ack received - stopped waiting for ack for pkt %v", pktId)
+	}
+
+	err = n.processStatusMessage(pkt.Header.Source, ackMessage.Status)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -100,6 +120,7 @@ func (n *node) HandleEmptyMessage(t types.Message, pkt transport.Packet) error {
 
 // is type of registry.Exec
 func (n *node) HandlePrivateMessage(t types.Message, pkt transport.Packet) error {
+
 	privateMessage := types.PrivateMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &privateMessage)
 	if err != nil {
@@ -109,9 +130,10 @@ func (n *node) HandlePrivateMessage(t types.Message, pkt transport.Packet) error
 
 	_, ok := privateMessage.Recipients[n.myAddr]
 	if !ok {
-		return errors.New("received private message meant for other peers")
+		return nil
 	}
 
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling privateMessage from %v", pkt.Header.Source)
 	err = n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
 		return err
@@ -129,31 +151,46 @@ func (n *node) HandleStatusMessage(t types.Message, pkt transport.Packet) error 
 	err := json.Unmarshal(pkt.Msg.Payload, &statusMessage)
 	if err != nil {
 		// TODO
-		// return err
+		return err
 	}
 
-	localStatus := n.sequenceStore.GetStatus()
+	err = n.processStatusMessage(pkt.Header.Source, statusMessage)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMessage) error {
+	localStatus := n.rumorStore.StatusMessage()
 
 	sendStatus := false
 	continueMongering := true
 	rumorsToSend := make([]types.Rumor, 0)
 
+	peers := make(map[string]struct{}, 0)
+
+	for peer := range localStatus {
+		peers[peer] = struct{}{}
+	}
+	for peer := range remoteStatus {
+		peers[peer] = struct{}{}
+	}
+
 	// figure
-	for peer, localSequence := range localStatus {
-		remoteSequence := statusMessage[peer]
+	for peer := range peers {
+		remoteSequence := remoteStatus[peer]
+		localSequence := localStatus[peer]
 
 		switch {
-		case localSequence == remoteSequence:
-			// same view
-			// do nothing for specific instances
-			continue
-
 		case localSequence > remoteSequence:
 			continueMongering = false
 			// send over missing
 			// where do i get them???
 
-			rumors := n.rumorStore.Get(peer, remoteSequence+1)
+			// todo probably broken indexing
+			rumors := n.rumorStore.GetRumors(peer, remoteSequence)
 
 			rumorsToSend = append(rumorsToSend, rumors...)
 
@@ -166,19 +203,25 @@ func (n *node) HandleStatusMessage(t types.Message, pkt transport.Packet) error 
 
 	}
 
-	// TODO debug scope issue of sendstatus, continueMongering, toSend
-
 	if sendStatus {
 		// send our status back to peer
-		n.sendStatusMessage(pkt.Header.Source)
+		err := n.sendStatusMessage(origin)
+		if err != nil {
+			// TODO handle error
+			return err
+		}
+
+		log.Info().Str("peerAddr", n.myAddr).Msgf("sent statusMessage to %v to solicitate rumors", origin)
 	}
 
 	if len(rumorsToSend) != 0 {
 		// send rumors to peer
-		err = n.sendRumors(pkt.Header.Source, rumorsToSend)
+		_, err := n.sendRumors(origin, rumorsToSend)
 		if err != nil {
 			// TODO handle error
+			return err
 		}
+		log.Info().Str("peerAddr", n.myAddr).Msgf("sent missing rumors %v to %v", origin, rumorsToSend)
 	}
 
 	if continueMongering {
@@ -186,9 +229,9 @@ func (n *node) HandleStatusMessage(t types.Message, pkt transport.Packet) error 
 
 		// TODO only send based on probability
 		if rand.Float64() < n.conf.ContinueMongering {
-			err := n.sendStatusMessage("", pkt.Header.Source)
+			err := n.sendStatusMessage("", origin)
 			if err != nil {
-				// TODO handle error
+				log.Info().Str("peerAddr", n.myAddr).Msgf("could not continue mongering, there is no more neighbor")
 			}
 		}
 	}
