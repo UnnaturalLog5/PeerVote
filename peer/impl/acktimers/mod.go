@@ -6,13 +6,13 @@ import (
 )
 
 type AckTimers interface {
-	Set(pktId string, timout time.Duration)
+	Set(pktID string, timout time.Duration)
 
 	// waits until the time expires
-	Wait(pktId string)
+	Wait(pktID string)
 
 	// stops timer
-	Stop(pktId string) bool
+	Stop(pktID string) bool
 }
 
 type ackTimers struct {
@@ -28,27 +28,27 @@ func New() AckTimers {
 	}
 }
 
-func (a *ackTimers) Set(pktId string, timeout time.Duration) {
+func (a *ackTimers) Set(pktID string, timeout time.Duration) {
 	a.Lock()
 	defer a.Unlock()
 
-	a.timers[pktId] = time.NewTimer(timeout)
+	a.timers[pktID] = time.NewTimer(timeout)
 }
 
-func (a *ackTimers) Wait(pktId string) {
+func (a *ackTimers) Wait(pktID string) {
 	a.RLock()
-	timer := a.timers[pktId]
+	timer := a.timers[pktID]
 	a.RUnlock()
 
 	<-timer.C
 }
 
-func (a *ackTimers) Stop(pktId string) bool {
+func (a *ackTimers) Stop(pktID string) bool {
 	a.Lock()
 	defer a.Unlock()
 
-	timer := a.timers[pktId]
-	delete(a.timers, pktId)
+	timer := a.timers[pktID]
+	delete(a.timers, pktID)
 
 	if timer != nil {
 		return timer.Stop()

@@ -9,7 +9,6 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-// TODO move somewhere sensible
 func marshalMessage(msg types.Message) (transport.Message, error) {
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -60,8 +59,11 @@ func (n *node) Broadcast(msg transport.Message) error {
 		Msg:      &msg,
 	}
 
-	// TODO store own rumor
-	n.rumorStore.Store(rumor)
+	// store own rumor
+	err := n.rumorStore.Store(rumor)
+	if err != nil {
+		return err
+	}
 
 	// process locally
 	header := transport.NewHeader(
@@ -76,7 +78,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 		Msg:    &msg,
 	}
 
-	err := n.conf.MessageRegistry.ProcessPacket(localPkt)
+	err = n.conf.MessageRegistry.ProcessPacket(localPkt)
 	if err != nil {
 		return err
 	}
@@ -85,15 +87,12 @@ func (n *node) Broadcast(msg transport.Message) error {
 
 	randomNeighborAddr, err := n.routingTable.GetRandomNeighbor(n.myAddr)
 	if err != nil {
-		// TODO
-		return nil
+		log.Err(err).Str("peerAddr", n.myAddr).Msg("could not send broadcast")
 	}
 
-	// TODO send Rumors
 	pkt, err := n.sendRumors(randomNeighborAddr, rumors)
 	if err != nil {
-		// TODO think about error handling
-		// return err
+		log.Err(err).Str("peerAddr", n.myAddr).Msg("could not send broadcast")
 	}
 
 	if n.conf.AckTimeout > 0 {
@@ -140,12 +139,10 @@ func (n *node) route(dest string, pkt transport.Packet) error {
 func (n *node) sendAck(pkt transport.Packet) error {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("acknowledging receipt of pkt from %v", pkt.Header.Source)
 
-	// TODO send to relayedby or send to source?
 	dest := pkt.Header.Source
 
 	status := types.StatusMessage(n.rumorStore.StatusMessage())
 
-	// TODO combine with code in n.Broadcast to smth like "makeTransportPkt(header, ...)"
 	ackMessage := types.AckMessage{
 		AckedPacketID: pkt.Header.PacketID,
 		Status:        status,
@@ -196,8 +193,6 @@ func (n *node) sendStatusMessage(dest string, forbiddenPeers ...string) error {
 			return err
 		}
 	}
-
-	// TODO what if there is no other neighbor?
 
 	// make header
 	header := transport.NewHeader(
@@ -268,28 +263,25 @@ func (n *node) sendHeartbeat() error {
 }
 
 func (n *node) waitForAck(pkt transport.Packet) {
-	pktId := pkt.Header.PacketID
+	pktID := pkt.Header.PacketID
 
 	// wait for ack
-	n.ackTimers.Set(pktId, n.conf.AckTimeout)
+	n.ackTimers.Set(pktID, n.conf.AckTimeout)
 
-	n.ackTimers.Wait(pktId)
 	// wait for timer
-	// <-n.ackTimers[pktId].C
-	// delete(n.ackTimers, pktId)
-	// timer expired
+	n.ackTimers.Wait(pktID)
 
 	// send message to another neighbor
 
 	// get another neighbor
-	// TODO don't send to the same peer again after a while
 	randomNeighborAddr, err := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Destination)
 	if err != nil {
-		// TODO handle
+		log.Err(err).Str("peerAddr", n.myAddr).Msg("timer expired - did not forward rumor")
 		return
 	}
 
-	log.Info().Str("peerAddr", n.myAddr).Msgf("timer expired - stopped waiting for ack for pkt %v, resending to %v instead", pktId, randomNeighborAddr)
+	log.Info().Str("peerAddr", n.myAddr).
+		Msgf("timer expired - stopped waiting for ack for pkt %v, resending to %v instead", pktID, randomNeighborAddr)
 
 	newPkt := pkt.Copy()
 
@@ -304,7 +296,6 @@ func (n *node) waitForAck(pkt transport.Packet) {
 
 	err = n.route(randomNeighborAddr, newPkt)
 	if err != nil {
-		// TODO handle
-		return
+		log.Err(err).Str("peerAddr", n.myAddr)
 	}
 }

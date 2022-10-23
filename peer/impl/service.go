@@ -28,7 +28,6 @@ func (n *node) receiveLoop() {
 
 			// asynchronously handle packet
 			go n.handlePacket(pkt)
-			// TODO handle errors
 		}
 	}
 }
@@ -41,12 +40,9 @@ func (n *node) sendStatusMessageLoop() {
 				return
 			case <-n.statusTicker.C:
 				// send status message
-				// log.Info().Str("peerAddr", n.myAddr).Msg("Send statusMessage")
-
-				// TODO send status message
 				err := n.sendStatusMessage("")
 				if err != nil {
-					log.Warn().Str("peerAddr", n.myAddr).Msg("did not send status message")
+					log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send status message")
 				}
 			}
 		}
@@ -63,11 +59,9 @@ func (n *node) sendHeartbeatLoop() {
 				// send status message
 				log.Info().Str("peerAddr", n.myAddr).Msg("Send heartbeat broadcast")
 
-				// TODO send status message
 				err := n.sendHeartbeat()
 				if err != nil {
 					log.Err(err).Str("peerAddr", n.myAddr).Msg("error sending heartbeat message")
-					// TODO log error
 				}
 			}
 		}
@@ -126,8 +120,7 @@ func (n *node) handlePacket(pkt transport.Packet) {
 
 		err := n.forward(pkt.Header.Destination, pkt)
 		if err != nil {
-			log.Err(err).Str("peerAddr", n.myAddr).Msg("error handling packet")
-			return
+			log.Err(err).Str("peerAddr", n.myAddr).Msg("error forwarding packet")
 		}
 
 		return
