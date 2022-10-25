@@ -129,6 +129,13 @@ func (n *node) HandlePrivateMessage(t types.Message, pkt transport.Packet) error
 		return nil
 	}
 
+	localPkt := transport.Packet{
+		Header: pkt.Header,
+		Msg:    privateMessage.Msg,
+	}
+
+	err = n.conf.MessageRegistry.ProcessPacket(localPkt)
+
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling privateMessage from %v", pkt.Header.Source)
 	err = n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
