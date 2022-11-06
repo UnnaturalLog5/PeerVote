@@ -4,14 +4,16 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
-	"go.dedis.ch/cs438/peer/impl/acktimers"
 	"go.dedis.ch/cs438/peer/impl/routingtable"
 	"go.dedis.ch/cs438/peer/impl/rumorstore"
+	"go.dedis.ch/cs438/peer/impl/timers"
+	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/types"
 )
 
@@ -68,17 +70,26 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	rumorStore := rumorstore.New()
 
-	ackTimers := acktimers.New()
+	timers := timers.New()
+
+	dataBlobStore := conf.Storage.GetDataBlobStore()
+	namingStore := conf.Storage.GetNamingStore()
+
+	catalog := make(peer.Catalog)
 
 	peer := node{
 		conf:                conf,
 		routingTable:        routingTable,
+		started:             false,
 		stopPeer:            stopPeer,
 		stopStatusTicker:    stopStatusTicker,
 		myAddr:              myAddr,
 		rumorStore:          rumorStore,
 		stopHeartbeatTicker: stopHeartbeatTicker,
-		ackTimers:           ackTimers,
+		timers:              timers,
+		dataBlobStore:       dataBlobStore,
+		namingStore:         namingStore,
+		catalog:             catalog,
 	}
 
 	// register Callbacks
@@ -97,8 +108,10 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 // - implements peer.Peer
 type node struct {
 	peer.Peer
+	peer.DataSharing
 	// sending a message on this channel will stop the node after it has been started
 	stopPeer chan struct{}
+	started  bool
 
 	conf         peer.Configuration
 	routingTable routingtable.RoutingTable
@@ -114,5 +127,11 @@ type node struct {
 	myAddr string
 
 	// maps from packet ID to timer
-	ackTimers acktimers.AckTimers
+	timers timers.Timers
+
+	// dataSharing entities
+	dataBlobStore storage.Store
+	namingStore   storage.Store
+	catalog       peer.Catalog
+	catalogMutex  sync.RWMutex
 }

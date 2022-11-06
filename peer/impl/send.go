@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
@@ -98,7 +99,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 
 	if n.conf.AckTimeout > 0 {
 		// wait for acknowledgement
-		go n.waitForAck(pkt)
+		go n.waitForAckOrResend(pkt)
 	}
 
 	return nil
@@ -263,14 +264,33 @@ func (n *node) sendHeartbeat() error {
 	return nil
 }
 
-func (n *node) waitForAck(pkt transport.Packet) {
+func (n *node) sendDataRequest(peer, key string) error {
+	dataRequestMsg := types.DataRequestMessage{
+		RequestID: xid.New().String(),
+		Key:       key,
+	}
+
+	msg, err := marshalMessage(dataRequestMsg)
+	if err != nil {
+		return err
+	}
+
+	err = n.Unicast(peer, msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) waitForAckOrResend(pkt transport.Packet) {
 	pktID := pkt.Header.PacketID
 
 	// wait for ack
-	n.ackTimers.Set(pktID, n.conf.AckTimeout)
+	n.timers.Set(pktID, n.conf.AckTimeout)
 
 	// wait for timer
-	n.ackTimers.Wait(pktID)
+	n.timers.Wait(pktID)
 
 	// send message to another neighbor
 
@@ -299,4 +319,8 @@ func (n *node) waitForAck(pkt transport.Packet) {
 	if err != nil {
 		log.Err(err).Str("peerAddr", n.myAddr)
 	}
+}
+
+func (n *node) requestChunk(chunkHexKey, peer string) {
+
 }

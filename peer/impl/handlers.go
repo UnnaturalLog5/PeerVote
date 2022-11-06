@@ -95,7 +95,7 @@ func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
 
 	// if this ack was expected, clean up timer
 	pktID := ackMessage.AckedPacketID
-	ok := n.ackTimers.Stop(pktID)
+	ok := n.timers.Stop(pktID)
 	if ok {
 		// stopped an active timer
 		log.Info().Str("peerAddr", n.myAddr).Msgf("ack received - stopped waiting for ack for pkt %v", pktID)

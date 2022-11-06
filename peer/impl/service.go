@@ -70,8 +70,11 @@ func (n *node) sendHeartbeatLoop() {
 
 // Start implements peer.Service
 func (n *node) Start() error {
-	// start listening asynchronously
-	go n.receiveLoop()
+	if n.started {
+		return errors.New("peer was already started - quitting.")
+	}
+
+	n.started = true
 
 	// send status message regularly
 	// but only if the interval is > 0
@@ -86,13 +89,19 @@ func (n *node) Start() error {
 		go n.sendHeartbeatLoop()
 	}
 
+	// start listening asynchronously
+	go n.receiveLoop()
+
 	return nil
 }
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
-	// properly close all timers and channels
+	if !n.started {
+		return errors.New("peer was not started - quitting.")
+	}
 
+	// properly close all timers and channels
 	if n.conf.AntiEntropyInterval > 0 {
 		n.stopStatusTicker <- struct{}{}
 		close(n.stopStatusTicker)
