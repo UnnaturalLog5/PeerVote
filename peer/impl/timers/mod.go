@@ -60,7 +60,7 @@ func (t *timers) Stop(key string, data any) bool {
 
 	if !ok {
 		// the timer did not exist
-		// it expired or was stopped before
+		// it expired or was stopped 
 		return false
 	}
 

@@ -74,7 +74,7 @@ func (n *node) retrieveDataFromPeer(key string) ([]byte, error) {
 	randPeerInt := rand.Intn(len(peers))
 	peer := peers[randPeerInt]
 
-	log.Info().Str("peerAddr", n.myAddr).Msgf("need chunk %v, requesting from peer %v", key, peer)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("need a chunk - requesting from peer %v", peer)
 
 	noRetries := n.conf.BackoffDataRequest.Retry
 	backoffFactor := n.conf.BackoffDataRequest.Factor
@@ -95,7 +95,16 @@ func (n *node) retrieveDataFromPeer(key string) ([]byte, error) {
 		// wait for answer
 		data, ok := n.timers.Wait(requestID, waitTime)
 		if ok {
-			return data.([]byte), nil
+			chunk := data.([]byte)
+
+			if len(chunk) == 0 {
+				// remove peer from catalog for this chunk
+				// if they returned an empty chunk
+				n.removePeerFromCatalog(key, peer)
+				return make([]byte, 0), errors.New("peer answered with empty message")
+			}
+
+			return chunk, nil
 		}
 		// if timer runs out
 		// resend with backoff
@@ -142,14 +151,6 @@ func (n *node) Download(metahash string) ([]byte, error) {
 	}
 
 	return data.Bytes(), nil
-}
-
-func (n *node) Tag(name string, mh string) error {
-	return nil
-}
-
-func (n *node) Resolve(name string) (metahash string) {
-	return ""
 }
 
 func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) (names []string, err error) {
