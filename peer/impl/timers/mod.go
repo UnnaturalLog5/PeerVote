@@ -7,9 +7,10 @@ import (
 
 type Timers interface {
 	// waits until the time expires
-	// returns true if the timer was stopped
+	// this operation is blocking
+	// returns data, true if the timer was stopped
 	//
-	// returns false if the timer expired
+	// returns nil, false if the timer expired
 	//
 	// optionally receives data sent by stop function
 	Wait(key string, timeout time.Duration) (any, bool)
@@ -60,7 +61,7 @@ func (t *timers) Stop(key string, data any) bool {
 
 	if !ok {
 		// the timer did not exist
-		// it expired or was stopped 
+		// it expired or was stopped
 		return false
 	}
 

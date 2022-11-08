@@ -3,7 +3,9 @@ package impl
 import (
 	"encoding/json"
 	"errors"
+	"regexp"
 
+	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
@@ -263,8 +265,11 @@ func (n *node) sendHeartbeat() error {
 	return nil
 }
 
-func (n *node) sendDataRequest(requestID, peer, key string) (string, error) {
+func (n *node) sendDataRequest(peer, key string) (string, error) {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending data request message to %v", peer)
+
+	requestID := xid.New().String()
+
 	dataRequestMessage := types.DataRequestMessage{
 		RequestID: requestID,
 		Key:       key,
@@ -305,6 +310,30 @@ func (n *node) sendDataReply(peer, requestID, key string, data []byte) error {
 	return nil
 }
 
+func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Regexp) (string, error) {
+	requestID := xid.New().String()
+	origin := n.myAddr
+	pattern := reg.String()
+
+	searchRequestMessage := types.SearchRequestMessage{
+		RequestID: requestID,
+		Origin:    origin,
+		Pattern:   pattern,
+		Budget:    budget,
+	}
+
+	msg, err := marshalMessage(searchRequestMessage)
+	if err != nil {
+		return "", err
+	}
+	err = n.Unicast(peer, msg)
+	if err != nil {
+		return "", err
+	}
+
+	return requestID, nil
+}
+
 func (n *node) waitForAckOrResend(pkt transport.Packet) {
 	pktID := pkt.Header.PacketID
 
@@ -313,9 +342,7 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 	if ok {
 		return
 	}
-
 	// send message to another neighbor
-
 	// get another neighbor
 	randomNeighborAddr, err := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Destination)
 	if err != nil {

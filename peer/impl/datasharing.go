@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
+	"go.dedis.ch/cs438/peer/impl/timers"
 )
 
 func (n *node) Upload(data io.Reader) (metahash string, err error) {
@@ -82,12 +82,10 @@ func (n *node) retrieveDataFromPeer(key string) ([]byte, error) {
 
 	for i := uint(0); i < noRetries; i++ {
 		// send data request
-		requestID := xid.New().String()
-
 		// calculate waitTime
 		waitTime := initialBackoff * time.Duration(math.Pow(float64(backoffFactor), float64(i)))
 
-		requestID, err := n.sendDataRequest(requestID, peer, key)
+		requestID, err := n.sendDataRequest(peer, key)
 		if err != nil {
 			return make([]byte, 0), err
 		}
@@ -154,9 +152,58 @@ func (n *node) Download(metahash string) ([]byte, error) {
 }
 
 func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) (names []string, err error) {
+	// get peers
+	peers := n.routingTable.GetNeighborsList()
+
+	// distribute search budget
+	peerBudgets := getPeerBudgets(peers, budget)
+
+	// send requestmessage
+	for peer, budget := range peerBudgets {
+		requestID, err := n.sendSearchRequestMessage(peer, budget, reg)
+		if err != nil {
+			log.Err(err).Str("peerAddr", n.myAddr).Msg("problem sending on of the search request messages")
+		}
+
+		data, ok := timers.New().Wait(requestID, timeout)
+	}
+
+	// for all peers
+	//   send search request message
+
+	// wait for responses
+	// don't close data channel upon first message
+	// only close, when nil is sent
+
 	return make([]string, 0), nil
 }
 
 func (n *node) SearchFirst(pattern regexp.Regexp, conf peer.ExpandingRing) (name string, err error) {
 	return "", nil
+}
+
+// distribute budget to peers
+func getPeerBudgets(peers []string, budget uint) map[string]uint {
+	peerBudgets := make(map[string]uint)
+
+	budgetPerPeer := budget / uint(len(peers))
+	budgetLeftOfer := budget % uint(len(peers))
+
+	for i, peer := range peers {
+		peerBudget := uint(0)
+
+		// see if peer gets a part of the left-over budget
+		if int(budgetLeftOfer)-i > 0 {
+			peerBudget = budgetPerPeer + 1
+		} else {
+			peerBudget = budgetPerPeer
+		}
+
+		// only include peer if it has a non-zero budget
+		if peerBudget > 0 {
+			peerBudgets[peer] = peerBudget
+		}
+	}
+
+	return peerBudgets
 }

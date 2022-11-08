@@ -25,6 +25,9 @@ type RoutingTable interface {
 	// Gets a random neighbor except those peers that are passed in
 	// returns an error, when no neighbor can be found
 	GetRandomNeighbor(forbiddenPeers ...string) (string, error)
+
+	// get all neighbors except the ones passed in as arguments
+	GetNeighborsList(forbiddenPeers ...string) []string
 }
 
 type routingTable struct {
@@ -81,7 +84,7 @@ func (r *routingTable) GetRandomNeighbor(forbiddenPeers ...string) (string, erro
 	r.RLock()
 	defer r.RUnlock()
 
-	neighborsList := r.getNeighborsList(forbiddenPeers...)
+	neighborsList := r.GetNeighborsList(forbiddenPeers...)
 
 	// neighbors struct
 	if len(neighborsList) == 0 {
@@ -93,7 +96,7 @@ func (r *routingTable) GetRandomNeighbor(forbiddenPeers ...string) (string, erro
 }
 
 // gets a list of neighbors without forbiddenPeers
-func (r *routingTable) getNeighborsList(forbiddenPeers ...string) []string {
+func (r *routingTable) GetNeighborsList(forbiddenPeers ...string) []string {
 	r.RLock()
 	defer r.RUnlock()
 
