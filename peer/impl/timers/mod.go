@@ -6,51 +6,66 @@ import (
 )
 
 type Timers interface {
-	Set(key string, timout time.Duration)
-
 	// waits until the time expires
-	Wait(key string)
+	// returns true if the timer was stopped
+	//
+	// returns false if the timer expired
+	//
+	// optionally receives data sent by stop function
+	Wait(key string, timeout time.Duration) (any, bool)
 
 	// stops timer
-	Stop(key string) bool
+	// optionally send data to waiting goroutine
+	// pass nil, to not send anything
+	Stop(key string, data any) bool
 }
 
 type timers struct {
 	sync.RWMutex
-	timers map[string]*time.Timer
+	timers map[string]chan any
 }
 
 func New() Timers {
 	return &timers{
-		timers: make(map[string]*time.Timer),
+		timers: make(map[string]chan any),
 	}
 }
 
-func (a *timers) Set(key string, timeout time.Duration) {
-	a.Lock()
-	defer a.Unlock()
+func (t *timers) Wait(key string, timeout time.Duration) (any, bool) {
+	c := make(chan any)
+	t.Lock()
+	t.timers[key] = c
+	t.Unlock()
 
-	a.timers[key] = time.NewTimer(timeout)
+	defer func() {
+		t.Lock()
+		delete(t.timers, key)
+		t.Unlock()
+	}()
+
+	select {
+	case <-time.After(timeout):
+		return nil, false
+	case data := <-c:
+		// received data
+		// i.e. stopped early
+		return data, true
+	}
 }
 
-func (a *timers) Wait(key string) {
-	a.RLock()
-	timer := a.timers[key]
-	a.RUnlock()
+func (t *timers) Stop(key string, data any) bool {
+	t.RLock()
+	c, ok := t.timers[key]
+	t.RUnlock()
 
-	<-timer.C
-}
-
-func (a *timers) Stop(key string) bool {
-	a.Lock()
-	defer a.Unlock()
-
-	timer := a.timers[key]
-	delete(a.timers, key)
-
-	if timer != nil {
-		return timer.Stop()
+	if !ok {
+		// the timer did not exist
+		// it expired or was stopped before
+		return false
 	}
 
-	return false
+	// send data via data channel
+	c <- data
+
+	return true
 }

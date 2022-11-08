@@ -22,7 +22,7 @@ func (n *node) UpdateCatalog(key string, peer string) {
 	n.catalog[key][peer] = struct{}{}
 }
 
-func (n *node) getPeersForData(key string) []string {
+func (n *node) getPeersForData(key string) ([]string, bool) {
 	n.catalogMutex.Lock()
 	defer n.catalogMutex.Unlock()
 
@@ -34,5 +34,9 @@ func (n *node) getPeersForData(key string) []string {
 		peers = append(peers, peer)
 	}
 
-	return peers
+	if len(peers) > 0 {
+		return peers, true
+	}
+
+	return nil, false
 }

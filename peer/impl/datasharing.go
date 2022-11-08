@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/xid"
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 )
 
@@ -63,83 +65,83 @@ func (n *node) Upload(data io.Reader) (metahash string, err error) {
 	return metaFileKeyHex, nil
 }
 
-// func (n *node) retrieveLocalData(metaFile []byte) ([]byte, error) {
+func (n *node) retrieveDataFromPeer(key string) ([]byte, error) {
+	peers, ok := n.getPeersForData(key)
+	if !ok {
+		return make([]byte, 0), errors.New("can't retrieve data from peer - no known peers")
+	}
 
-// 	return data.Bytes(), nil
-// }
+	randPeerInt := rand.Intn(len(peers))
+	peer := peers[randPeerInt]
 
-func (n *node) retrieveDataFromPeer(peer, key string) ([]byte, error) {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("need chunk %v, requesting from peer %v", key, peer)
+
 	noRetries := n.conf.BackoffDataRequest.Retry
 	backoffFactor := n.conf.BackoffDataRequest.Factor
 	initialBackoff := n.conf.BackoffDataRequest.Initial
 
 	for i := uint(0); i < noRetries; i++ {
 		// send data request
-		err := n.sendDataRequest(peer, key)
+		requestID := xid.New().String()
+
+		// calculate waitTime
+		waitTime := initialBackoff * time.Duration(math.Pow(float64(backoffFactor), float64(i)))
+
+		requestID, err := n.sendDataRequest(requestID, peer, key)
 		if err != nil {
 			return make([]byte, 0), err
 		}
 
-		// wait for
-		waitTime := initialBackoff * time.Duration(math.Pow(float64(backoffFactor), float64(i)))
-
 		// wait for answer
-		n.timers.Set(key, waitTime)
-
-		n.timers.Wait(key)
+		data, ok := n.timers.Wait(requestID, waitTime)
+		if ok {
+			return data.([]byte), nil
+		}
 		// if timer runs out
 		// resend with backoff
+		// in next iteration
+
+		return make([]byte, 0), nil
 	}
 
 	return make([]byte, 0), nil
 }
 
 func (n *node) Download(metahash string) ([]byte, error) {
+	var err error
 	metaFile := n.dataBlobStore.Get(metahash)
 
-	if metaFile != nil {
+	if metaFile == nil {
 		// retrieve from other peers
-
-		return make([]byte, 0), errors.New("could not retrieve file - this metahash is not known locally" + metahash)
-		// retrieve locally
-		// return n.retrieveLocalData(metaFile)
+		metaFile, err = n.retrieveDataFromPeer(metahash)
+		if err != nil {
+			return make([]byte, 0), err
+		}
 	}
 
 	chunkHexKeys := strings.Split(string(metaFile), peer.MetafileSep)
 
 	data := new(bytes.Buffer)
 
-	retrievedChunks := make(map[string][]byte)
-
 	for _, chunkHexKey := range chunkHexKeys {
+		// try to get locally
 		chunk := n.dataBlobStore.Get(chunkHexKey)
-
-		if chunk != nil {
-			retrievedChunks[chunkHexKey] = chunk
-		}
-
-		peers := n.getPeersForData(chunkHexKey)
-		randPeerInt := rand.Intn(len(peers))
-		peer := peers[randPeerInt]
-
-		chunk, err := n.retrieveDataFromPeer(peer, chunkHexKey)
-		if err != nil {
-			return make([]byte, 0), err
+		if chunk == nil {
+			// retrieve from other peers, if not found locally
+			chunk, err = n.retrieveDataFromPeer(chunkHexKey)
+			if err != nil {
+				return make([]byte, 0), err
+			}
 		}
 
 		// combine data
-		_, err = data.Write(chunk)
+		_, err := data.Write(chunk)
 		if err != nil {
 			return make([]byte, 0), err
 		}
-
-		return data.Bytes(), nil
 	}
 
-	// if not available locally or on other peers
-	// return error if metahash can't be found
-	// return data.Bytes(), nil
-	return make([]byte, 0), errors.New("could not retrieve file - this metahash is unknown " + metahash)
+	return data.Bytes(), nil
 }
 
 func (n *node) Tag(name string, mh string) error {

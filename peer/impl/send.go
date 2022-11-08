@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
@@ -264,13 +263,36 @@ func (n *node) sendHeartbeat() error {
 	return nil
 }
 
-func (n *node) sendDataRequest(peer, key string) error {
-	dataRequestMsg := types.DataRequestMessage{
-		RequestID: xid.New().String(),
+func (n *node) sendDataRequest(requestID, peer, key string) (string, error) {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending data request message to %v", peer)
+	dataRequestMessage := types.DataRequestMessage{
+		RequestID: requestID,
 		Key:       key,
 	}
 
-	msg, err := marshalMessage(dataRequestMsg)
+	msg, err := marshalMessage(dataRequestMessage)
+	if err != nil {
+		return "", err
+	}
+
+	err = n.Unicast(peer, msg)
+	if err != nil {
+		return "", err
+	}
+
+	return requestID, nil
+}
+
+func (n *node) sendDataReply(peer, requestID, key string, data []byte) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending data reply message to %v", peer)
+
+	dataReplyMessage := types.DataReplyMessage{
+		RequestID: requestID,
+		Key:       key,
+		Value:     data,
+	}
+
+	msg, err := marshalMessage(dataReplyMessage)
 	if err != nil {
 		return err
 	}
@@ -286,11 +308,11 @@ func (n *node) sendDataRequest(peer, key string) error {
 func (n *node) waitForAckOrResend(pkt transport.Packet) {
 	pktID := pkt.Header.PacketID
 
-	// wait for ack
-	n.timers.Set(pktID, n.conf.AckTimeout)
-
 	// wait for timer
-	n.timers.Wait(pktID)
+	_, ok := n.timers.Wait(pktID, n.conf.AckTimeout)
+	if ok {
+		return
+	}
 
 	// send message to another neighbor
 

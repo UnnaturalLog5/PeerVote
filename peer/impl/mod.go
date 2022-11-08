@@ -99,6 +99,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.StatusMessage{}, peer.HandleStatusMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, peer.HandlePrivateMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, peer.HandleEmptyMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, peer.HandleDataReplyMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.DataRequestMessage{}, peer.HandleDataRequestMessage)
 
 	return &peer
 }

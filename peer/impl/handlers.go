@@ -76,7 +76,6 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send missing rumors")
 		}
-
 	}
 
 	return nil
@@ -95,7 +94,7 @@ func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
 
 	// if this ack was expected, clean up timer
 	pktID := ackMessage.AckedPacketID
-	ok := n.timers.Stop(pktID)
+	ok := n.timers.Stop(pktID, nil)
 	if ok {
 		// stopped an active timer
 		log.Info().Str("peerAddr", n.myAddr).Msgf("ack received - stopped waiting for ack for pkt %v", pktID)
@@ -111,7 +110,49 @@ func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
 
 func (n *node) HandleEmptyMessage(t types.Message, pkt transport.Packet) error {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling heartbeat message from %v", pkt.Header.Source)
-	// handle status
+	return nil
+}
+
+func (n *node) HandleDataReplyMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling data reply message message from %v", pkt.Header.Source)
+
+	dataReplyMessage := types.DataReplyMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &dataReplyMessage)
+	if err != nil {
+		return err
+	}
+
+	requestID := dataReplyMessage.RequestID
+	data := dataReplyMessage.Value
+
+	log.Info().Str("peerAddr", n.myAddr).Msgf("about to stop timer")
+	ok := n.timers.Stop(requestID, data)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("stopped timer")
+	if !ok {
+		log.Info().Str("peerAddr", n.myAddr).Msgf("error sending data reply to waiting goroutine")
+	}
+
+	return nil
+}
+
+func (n *node) HandleDataRequestMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling data request message from %v", pkt.Header.Source)
+
+	dataRequestMessage := types.DataRequestMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &dataRequestMessage)
+	if err != nil {
+		return err
+	}
+
+	peer := pkt.Header.Source
+	key := dataRequestMessage.Key
+	requestID := dataRequestMessage.RequestID
+
+	data := n.dataBlobStore.Get(key)
+
+	// send data reply message
+	n.sendDataReply(peer, requestID, key, data)
+
 	return nil
 }
 
