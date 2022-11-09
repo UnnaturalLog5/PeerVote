@@ -94,7 +94,7 @@ func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
 
 	// if this ack was expected, clean up timer
 	pktID := ackMessage.AckedPacketID
-	ok := n.timers.Stop(pktID, nil)
+	ok := n.timers.Ping(pktID)
 	if ok {
 		// stopped an active timer
 		log.Info().Str("peerAddr", n.myAddr).Msgf("ack received - stopped waiting for ack for pkt %v", pktID)
@@ -125,9 +125,7 @@ func (n *node) HandleDataReplyMessage(t types.Message, pkt transport.Packet) err
 	requestID := dataReplyMessage.RequestID
 	data := dataReplyMessage.Value
 
-	log.Info().Str("peerAddr", n.myAddr).Msgf("about to stop timer")
-	ok := n.timers.Stop(requestID, data)
-	log.Info().Str("peerAddr", n.myAddr).Msgf("stopped timer")
+	ok := n.timers.Ping(requestID, data)
 	if !ok {
 		log.Info().Str("peerAddr", n.myAddr).Msgf("error sending data reply to waiting goroutine")
 	}
@@ -156,9 +154,36 @@ func (n *node) HandleDataRequestMessage(t types.Message, pkt transport.Packet) e
 	return nil
 }
 
+func (n *node) HandleSearchReplyMessage(t types.Message, pkt transport.Packet) error {
+	seachReplyMessage := types.SearchReplyMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &seachReplyMessage)
+	if err != nil {
+		return err
+	}
+
+	responses := seachReplyMessage.Responses
+	requestID := seachReplyMessage.RequestID
+
+	n.timers.Ping(requestID, responses)
+
+	// update catalog
+	for _, fileInfo := range responses {
+		n.UpdateCatalog(
+			fileInfo.Metahash,
+			pkt.Header.Source,
+		)
+
+		n.Tag(
+			fileInfo.Name,
+			fileInfo.Metahash,
+		)
+	}
+
+	return nil
+}
+
 // is type of registry.Exec
 func (n *node) HandlePrivateMessage(t types.Message, pkt transport.Packet) error {
-
 	privateMessage := types.PrivateMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &privateMessage)
 	if err != nil {

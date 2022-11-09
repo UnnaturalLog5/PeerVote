@@ -3,70 +3,149 @@ package timers
 import (
 	"sync"
 	"time"
+
+	"github.com/rs/xid"
 )
 
 type Timers interface {
-	// waits until the time expires
+	//
+	SetUpMultiple(timeout time.Duration) string
+
+	Register(metaSearchKey, key string)
+
+	// waits until the time expires or it is stopped
 	// this operation is blocking
 	// returns data, true if the timer was stopped
 	//
 	// returns nil, false if the timer expired
 	//
 	// optionally receives data sent by stop function
-	Wait(key string, timeout time.Duration) (any, bool)
+	WaitMultiple(key string) ([]any, bool)
+
+	WaitSingle(key string, timeout time.Duration) (any, bool)
 
 	// stops timer
 	// optionally send data to waiting goroutine
 	// pass nil, to not send anything
-	Stop(key string, data any) bool
+	Ping(key string, data ...any) bool
+}
+
+type timerData struct {
+	c             chan any
+	metaSearchKey string
+	numValues     int
+	timeout       time.Duration
 }
 
 type timers struct {
-	sync.RWMutex
-	timers map[string]chan any
+	sync.Mutex
+	timers map[string]*timerData
 }
 
 func New() Timers {
 	return &timers{
-		timers: make(map[string]chan any),
+		timers: make(map[string]*timerData),
 	}
 }
 
-func (t *timers) Wait(key string, timeout time.Duration) (any, bool) {
+func (t *timers) WaitSingle(key string, timeout time.Duration) (any, bool) {
+	waitID := t.SetUpMultiple(timeout)
+	t.Register(waitID, key)
+	data, ok := t.WaitMultiple(waitID)
+	if ok {
+		return data[0], true
+	}
+	return nil, false
+}
+
+func (t *timers) SetUpMultiple(timeout time.Duration) string {
 	c := make(chan any)
+	waitId := xid.New().String()
+
+	timerData := &timerData{
+		c:             c,
+		metaSearchKey: waitId,
+		timeout:       timeout,
+	}
+
 	t.Lock()
-	t.timers[key] = c
+	t.timers[waitId] = timerData
 	t.Unlock()
 
-	defer func() {
+	go func() {
+		<-time.After(timeout)
+
+		t.Lock()
+		delete(t.timers, waitId)
+		t.Unlock()
+	}()
+
+	return waitId
+}
+
+func (t *timers) Register(waitId, key string) {
+	t.Lock()
+	timerData := t.timers[waitId]
+	timerData.numValues++
+	timeout := timerData.timeout
+	t.timers[key] = timerData
+	t.Unlock()
+
+	go func() {
+		<-time.After(timeout)
+
 		t.Lock()
 		delete(t.timers, key)
 		t.Unlock()
 	}()
+}
 
-	select {
-	case <-time.After(timeout):
-		return nil, false
-	case data := <-c:
-		// received data
-		// i.e. stopped early
-		return data, true
+func (t *timers) WaitMultiple(waitId string) ([]any, bool) {
+	t.Lock()
+	timerData := t.timers[waitId]
+	timeout := timerData.timeout
+	c := timerData.c
+	numValues := timerData.numValues
+	t.Unlock()
+
+	data := make([]any, 0)
+
+	for {
+		select {
+		case <-time.After(timeout):
+			// timer expired
+			return data, false
+		case datum := <-c:
+			// received data
+			data = append(data, datum)
+
+			// if we received all we are waiting for, return data
+			if len(data) == numValues {
+				return data, true
+			}
+		}
 	}
 }
 
-func (t *timers) Stop(key string, data any) bool {
-	t.RLock()
-	c, ok := t.timers[key]
-	t.RUnlock()
-
+func (t *timers) Ping(key string, data ...any) bool {
+	t.Lock()
+	timerData, ok := t.timers[key]
 	if !ok {
 		// the timer did not exist
 		// it expired or was stopped
 		return false
 	}
 
-	// send data via data channel
-	c <- data
+	c := timerData.c
+	t.Unlock()
 
+	var sendData any
+	if len(data) == 0 {
+		// send data via data channel
+		sendData = nil
+	} else {
+		sendData = data[0]
+	}
+	c <- sendData
 	return true
 }

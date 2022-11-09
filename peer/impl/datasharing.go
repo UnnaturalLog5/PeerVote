@@ -14,7 +14,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
-	"go.dedis.ch/cs438/peer/impl/timers"
 )
 
 func (n *node) Upload(data io.Reader) (metahash string, err error) {
@@ -91,7 +90,7 @@ func (n *node) retrieveDataFromPeer(key string) ([]byte, error) {
 		}
 
 		// wait for answer
-		data, ok := n.timers.Wait(requestID, waitTime)
+		data, ok := n.timers.WaitSingle(requestID, waitTime)
 		if ok {
 			chunk := data.([]byte)
 
@@ -151,12 +150,14 @@ func (n *node) Download(metahash string) ([]byte, error) {
 	return data.Bytes(), nil
 }
 
-func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) (names []string, err error) {
+func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) ([]string, error) {
 	// get peers
 	peers := n.routingTable.GetNeighborsList()
 
 	// distribute search budget
 	peerBudgets := getPeerBudgets(peers, budget)
+
+	metaSearchKey := n.timers.SetUpMultiple(timeout)
 
 	// send requestmessage
 	for peer, budget := range peerBudgets {
@@ -165,20 +166,22 @@ func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) 
 			log.Err(err).Str("peerAddr", n.myAddr).Msg("problem sending on of the search request messages")
 		}
 
-		data, ok := timers.New().Wait(requestID, timeout)
+		// register requestID
+		n.timers.Register(metaSearchKey, requestID)
 	}
 
-	// for all peers
-	//   send search request message
-
 	// wait for responses
-	// don't close data channel upon first message
-	// only close, when nil is sent
+	results, _ := n.timers.WaitMultiple(metaSearchKey)
 
-	return make([]string, 0), nil
+	names := make([]string, 0)
+	for _, result := range results {
+		names = append(names, result.(string))
+	}
+
+	return names, nil
 }
 
-func (n *node) SearchFirst(pattern regexp.Regexp, conf peer.ExpandingRing) (name string, err error) {
+func (n *node) SearchFirst(pattern regexp.Regexp, conf peer.ExpandingRing) (string, error) {
 	return "", nil
 }
 

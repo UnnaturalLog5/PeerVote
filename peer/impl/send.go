@@ -337,8 +337,7 @@ func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Reg
 func (n *node) waitForAckOrResend(pkt transport.Packet) {
 	pktID := pkt.Header.PacketID
 
-	// wait for timer
-	_, ok := n.timers.Wait(pktID, n.conf.AckTimeout)
+	_, ok := n.timers.WaitSingle(pktID, n.conf.AckTimeout)
 	if ok {
 		return
 	}
