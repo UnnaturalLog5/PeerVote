@@ -14,9 +14,10 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
+	"go.dedis.ch/cs438/types"
 )
 
-func (n *node) Upload(data io.Reader) (metahash string, err error) {
+func (n *node) Upload(data io.Reader) (string, error) {
 	// process chunk by chunk
 	// for each chunk
 	//	compute hash
@@ -152,7 +153,7 @@ func (n *node) Download(metahash string) ([]byte, error) {
 
 func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) ([]string, error) {
 	// get peers
-	peers := n.routingTable.GetNeighborsList()
+	peers := n.routingTable.GetNeighborsList(n.myAddr)
 
 	// distribute search budget
 	peerBudgets := getPeerBudgets(peers, budget)
@@ -171,11 +172,36 @@ func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) 
 	}
 
 	// wait for responses
-	results, _ := n.timers.WaitMultiple(metaSearchKey)
+	responses, _ := n.timers.WaitMultiple(metaSearchKey)
+
+	namesSet := make(map[string]struct{}, 0)
+
+	// fileInfos := make([]types.FileInfo, 0)
+	for _, response := range responses {
+		// type assertion -> this could go wrong if unexpected data is sent
+		for _, result := range response.([]types.FileInfo) {
+			// fileInfo := result.(types.FileInfo)
+			fileInfo := result
+
+			// treat like set
+			namesSet[fileInfo.Name] = struct{}{}
+		}
+	}
+
+	n.namingStore.ForEach(func(name string, val []byte) bool {
+		// ignore this entry if the regex doesn't give any matches
+		if !reg.MatchString(name) {
+			return true
+		}
+
+		namesSet[name] = struct{}{}
+
+		return true
+	})
 
 	names := make([]string, 0)
-	for _, result := range results {
-		names = append(names, result.(string))
+	for name := range namesSet {
+		names = append(names, name)
 	}
 
 	return names, nil
@@ -188,6 +214,11 @@ func (n *node) SearchFirst(pattern regexp.Regexp, conf peer.ExpandingRing) (stri
 // distribute budget to peers
 func getPeerBudgets(peers []string, budget uint) map[string]uint {
 	peerBudgets := make(map[string]uint)
+
+	// never divide by zero!
+	if len(peers) == 0 {
+		return peerBudgets
+	}
 
 	budgetPerPeer := budget / uint(len(peers))
 	budgetLeftOfer := budget % uint(len(peers))

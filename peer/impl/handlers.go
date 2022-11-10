@@ -3,6 +3,7 @@ package impl
 import (
 	"encoding/json"
 	"math/rand"
+	"regexp"
 
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
@@ -155,6 +156,7 @@ func (n *node) HandleDataRequestMessage(t types.Message, pkt transport.Packet) e
 }
 
 func (n *node) HandleSearchReplyMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling search reply message from %v", pkt.Header.Source)
 	seachReplyMessage := types.SearchReplyMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &seachReplyMessage)
 	if err != nil {
@@ -173,10 +175,62 @@ func (n *node) HandleSearchReplyMessage(t types.Message, pkt transport.Packet) e
 			pkt.Header.Source,
 		)
 
+		for _, chunk := range fileInfo.Chunks {
+			if chunk != nil {
+				n.UpdateCatalog(
+					string(chunk),
+					pkt.Header.Source,
+				)
+			}
+		}
+
 		n.Tag(
 			fileInfo.Name,
 			fileInfo.Metahash,
 		)
+	}
+
+	return nil
+}
+
+func (n *node) HandleSearchRequestMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling search request message from %v", pkt.Header.Source)
+	seachRequestMessage := types.SearchRequestMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &seachRequestMessage)
+	if err != nil {
+		return err
+	}
+
+	reg := regexp.MustCompile(seachRequestMessage.Pattern)
+	requestID := seachRequestMessage.RequestID
+
+	// keep packet
+	// just set origin and relayed by to this peer
+	// distribute remaining seachRequestMessage.Budget
+	// forward searchrequestmessage
+	peers := n.routingTable.GetNeighborsList(n.myAddr, pkt.Header.Source)
+	// we split the remaining budget
+	peerBudgets := getPeerBudgets(peers, seachRequestMessage.Budget-1)
+	for peer, budget := range peerBudgets {
+		err = n.forwardSearchRequestMessage(peer, budget, *reg, requestID)
+		if err != nil {
+			log.Err(err).Str("peerAddr", n.myAddr).Msgf("couldn't forward search request from %v to %v", pkt.Header.Source, peer)
+		}
+	}
+
+	fileInfos := n.getFileInfos(*reg)
+
+	// send search reply message
+	searchReplyMessage := types.SearchReplyMessage{
+		RequestID: requestID,
+		Responses: fileInfos,
+	}
+	// get fileinfo
+
+	searchOrigin := seachRequestMessage.Origin
+	err = n.sendSearchReplyMessage(searchOrigin, searchReplyMessage)
+	if err != nil {
+		return err
 	}
 
 	return nil

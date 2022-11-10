@@ -197,6 +197,12 @@ func (n *node) sendStatusMessage(dest string, forbiddenPeers ...string) error {
 		}
 	}
 
+	n.unicastDirect(dest, msg)
+
+	return nil
+}
+
+func (n *node) unicastDirect(dest string, msg transport.Message) error {
 	// make header
 	header := transport.NewHeader(
 		n.myAddr,
@@ -211,7 +217,7 @@ func (n *node) sendStatusMessage(dest string, forbiddenPeers ...string) error {
 	}
 
 	// send to destination
-	err = n.conf.Socket.Send(dest, pkt, 0)
+	err := n.conf.Socket.Send(dest, pkt, 0)
 	if err != nil {
 		return err
 	}
@@ -310,8 +316,7 @@ func (n *node) sendDataReply(peer, requestID, key string, data []byte) error {
 	return nil
 }
 
-func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Regexp) (string, error) {
-	requestID := xid.New().String()
+func (n *node) forwardSearchRequestMessage(peer string, budget uint, reg regexp.Regexp, requestID string) error {
 	origin := n.myAddr
 	pattern := reg.String()
 
@@ -324,14 +329,41 @@ func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Reg
 
 	msg, err := marshalMessage(searchRequestMessage)
 	if err != nil {
-		return "", err
+		return err
 	}
 	err = n.Unicast(peer, msg)
 	if err != nil {
-		return "", err
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Regexp) (string, error) {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending search request message to %v", peer)
+	requestID := xid.New().String()
+
+	err := n.forwardSearchRequestMessage(peer, budget, reg, requestID)
+	if err != nil {
+		return "", nil
 	}
 
 	return requestID, nil
+}
+
+func (n *node) sendSearchReplyMessage(peer string, searchReplyMessage types.SearchReplyMessage) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending search reply message to %v", peer)
+	msg, err := marshalMessage(searchReplyMessage)
+	if err != nil {
+		return err
+	}
+
+	err = n.unicastDirect(peer, msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (n *node) waitForAckOrResend(pkt transport.Packet) {

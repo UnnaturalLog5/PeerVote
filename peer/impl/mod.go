@@ -101,6 +101,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, peer.HandleEmptyMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, peer.HandleDataReplyMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.DataRequestMessage{}, peer.HandleDataRequestMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, peer.HandleSearchReplyMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, peer.HandleSearchRequestMessage)
 
 	return &peer
 }

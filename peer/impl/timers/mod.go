@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/rs/zerolog/log"
 )
 
 type Timers interface {
@@ -121,6 +122,7 @@ func (t *timers) WaitMultiple(waitId string) ([]any, bool) {
 
 			// if we received all we are waiting for, return data
 			if len(data) == numValues {
+				log.Info().Msg("collected all values, done!")
 				return data, true
 			}
 		}
