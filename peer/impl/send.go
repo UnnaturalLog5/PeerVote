@@ -316,8 +316,7 @@ func (n *node) sendDataReply(peer, requestID, key string, data []byte) error {
 	return nil
 }
 
-func (n *node) forwardSearchRequestMessage(peer string, budget uint, reg regexp.Regexp, requestID string) error {
-	origin := n.myAddr
+func (n *node) forwardSearchRequestMessage(origin, peer string, budget uint, reg regexp.Regexp, requestID string) error {
 	pattern := reg.String()
 
 	searchRequestMessage := types.SearchRequestMessage{
@@ -342,8 +341,8 @@ func (n *node) forwardSearchRequestMessage(peer string, budget uint, reg regexp.
 func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Regexp) (string, error) {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending search request message to %v", peer)
 	requestID := xid.New().String()
-
-	err := n.forwardSearchRequestMessage(peer, budget, reg, requestID)
+	origin := n.myAddr
+	err := n.forwardSearchRequestMessage(origin, peer, budget, reg, requestID)
 	if err != nil {
 		return "", nil
 	}

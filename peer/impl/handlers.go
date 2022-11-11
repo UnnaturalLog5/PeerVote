@@ -204,6 +204,10 @@ func (n *node) HandleSearchRequestMessage(t types.Message, pkt transport.Packet)
 	reg := regexp.MustCompile(seachRequestMessage.Pattern)
 	requestID := seachRequestMessage.RequestID
 
+	// check if already received
+	// if not store
+	// if yes: skip
+
 	// keep packet
 	// just set origin and relayed by to this peer
 	// distribute remaining seachRequestMessage.Budget
@@ -212,12 +216,15 @@ func (n *node) HandleSearchRequestMessage(t types.Message, pkt transport.Packet)
 	// we split the remaining budget
 	peerBudgets := getPeerBudgets(peers, seachRequestMessage.Budget-1)
 	for peer, budget := range peerBudgets {
-		err = n.forwardSearchRequestMessage(peer, budget, *reg, requestID)
+		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarding search request message from %v to %v", pkt.Header.Source, peer)
+		origin := pkt.Header.Source
+		err = n.forwardSearchRequestMessage(origin, peer, budget, *reg, requestID)
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msgf("couldn't forward search request from %v to %v", pkt.Header.Source, peer)
 		}
 	}
 
+	// get fileinfo
 	fileInfos := n.getFileInfos(*reg)
 
 	// send search reply message
@@ -225,7 +232,6 @@ func (n *node) HandleSearchRequestMessage(t types.Message, pkt transport.Packet)
 		RequestID: requestID,
 		Responses: fileInfos,
 	}
-	// get fileinfo
 
 	searchOrigin := seachRequestMessage.Origin
 	err = n.sendSearchReplyMessage(searchOrigin, searchReplyMessage)

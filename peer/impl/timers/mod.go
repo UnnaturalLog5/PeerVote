@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/rs/zerolog/log"
 )
 
 type Timers interface {
@@ -21,7 +20,7 @@ type Timers interface {
 	// returns nil, false if the timer expired
 	//
 	// optionally receives data sent by stop function
-	WaitMultiple(key string) ([]any, bool)
+	WaitMultiple(key string) []any
 
 	WaitSingle(key string, timeout time.Duration) (any, bool)
 
@@ -34,7 +33,6 @@ type Timers interface {
 type timerData struct {
 	c             chan any
 	metaSearchKey string
-	numValues     int
 	timeout       time.Duration
 }
 
@@ -52,11 +50,18 @@ func New() Timers {
 func (t *timers) WaitSingle(key string, timeout time.Duration) (any, bool) {
 	waitID := t.SetUpMultiple(timeout)
 	t.Register(waitID, key)
-	data, ok := t.WaitMultiple(waitID)
-	if ok {
-		return data[0], true
+
+	t.Lock()
+	timerData := t.timers[key]
+	t.Unlock()
+
+	select {
+	case <-time.After(timeout):
+		// timer expired
+		return nil, false
+	case datum := <-timerData.c:
+		return datum, true
 	}
-	return nil, false
 }
 
 func (t *timers) SetUpMultiple(timeout time.Duration) string {
@@ -87,7 +92,6 @@ func (t *timers) SetUpMultiple(timeout time.Duration) string {
 func (t *timers) Register(waitId, key string) {
 	t.Lock()
 	timerData := t.timers[waitId]
-	timerData.numValues++
 	timeout := timerData.timeout
 	t.timers[key] = timerData
 	t.Unlock()
@@ -101,12 +105,11 @@ func (t *timers) Register(waitId, key string) {
 	}()
 }
 
-func (t *timers) WaitMultiple(waitId string) ([]any, bool) {
+func (t *timers) WaitMultiple(waitId string) []any {
 	t.Lock()
 	timerData := t.timers[waitId]
 	timeout := timerData.timeout
 	c := timerData.c
-	numValues := timerData.numValues
 	t.Unlock()
 
 	data := make([]any, 0)
@@ -115,16 +118,10 @@ func (t *timers) WaitMultiple(waitId string) ([]any, bool) {
 		select {
 		case <-time.After(timeout):
 			// timer expired
-			return data, false
+			return data
 		case datum := <-c:
 			// received data
 			data = append(data, datum)
-
-			// if we received all we are waiting for, return data
-			if len(data) == numValues {
-				log.Info().Msg("collected all values, done!")
-				return data, true
-			}
 		}
 	}
 }

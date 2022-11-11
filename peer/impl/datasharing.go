@@ -172,7 +172,7 @@ func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) 
 	}
 
 	// wait for responses
-	responses, _ := n.timers.WaitMultiple(metaSearchKey)
+	responses := n.timers.WaitMultiple(metaSearchKey)
 
 	namesSet := make(map[string]struct{}, 0)
 
