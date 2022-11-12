@@ -1733,7 +1733,6 @@ func Test_HW2_Scenario(t *testing.T) {
 			// wait for the anti-entropy to take effect, i.e. everyone get the
 			// heartbeat messages sent by nodeE and nodeF.
 			time.Sleep(time.Second * 10)
-			fmt.Println("____________________")
 			// > NodeF should be able to index all files (2)
 			names, err = nodeF.SearchAll(*regexp.MustCompile(".*"), 8, time.Second*4)
 			require.NoError(t, err)

@@ -78,7 +78,7 @@ func (n *node) sendHeartbeatLoop() {
 // Start implements peer.Service
 func (n *node) Start() error {
 	if n.started {
-		return errors.New("peer was already started - quitting.")
+		return errors.New("peer was already started - quitting")
 	}
 
 	n.started = true
@@ -105,7 +105,7 @@ func (n *node) Start() error {
 // Stop implements peer.Service
 func (n *node) Stop() error {
 	if !n.started {
-		return errors.New("peer was not started - quitting.")
+		return errors.New("peer was not started - quitting")
 	}
 
 	defer func() {
@@ -137,7 +137,8 @@ func (n *node) handlePacket(pkt transport.Packet) {
 	dest := pkt.Header.Destination
 	if dest != n.myAddr {
 		to := n.routingTable.GetEntry(dest)
-		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarded packet %v meant for peer %v to %v", pkt.Header.PacketID, dest, to)
+		log.Info().Str("peerAddr", n.myAddr).
+			Msgf("forwarded packet %v meant for peer %v to %v", pkt.Header.PacketID, dest, to)
 
 		err := n.forward(dest, pkt)
 		if err != nil {

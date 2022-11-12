@@ -204,7 +204,10 @@ func (n *node) sendStatusMessage(dest string) error {
 		return err
 	}
 
-	n.unicastDirect(dest, msg)
+	err = n.unicastDirect(dest, msg)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -323,7 +326,7 @@ func (n *node) sendDataReply(peer, requestID, key string, data []byte) error {
 	return nil
 }
 
-func (n *node) forwardSearchRequestMessage(origin, peer string, budget uint, reg regexp.Regexp, requestID string) error {
+func (n *node) forwardSearchRequest(origin, peer string, budget uint, reg regexp.Regexp, requestID string) error {
 	pattern := reg.String()
 
 	searchRequestMessage := types.SearchRequestMessage{
@@ -349,9 +352,9 @@ func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Reg
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending search request message to %v", peer)
 	requestID := xid.New().String()
 	origin := n.myAddr
-	err := n.forwardSearchRequestMessage(origin, peer, budget, reg, requestID)
+	err := n.forwardSearchRequest(origin, peer, budget, reg, requestID)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	return requestID, nil

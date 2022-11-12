@@ -151,7 +151,10 @@ func (n *node) HandleDataRequestMessage(t types.Message, pkt transport.Packet) e
 	data := n.dataBlobStore.Get(key)
 
 	// send data reply message
-	n.sendDataReply(peer, requestID, key, data)
+	err = n.sendDataReply(peer, requestID, key, data)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -185,10 +188,13 @@ func (n *node) HandleSearchReplyMessage(t types.Message, pkt transport.Packet) e
 			}
 		}
 
-		n.Tag(
+		err = n.Tag(
 			fileInfo.Name,
 			fileInfo.Metahash,
 		)
+		if err != nil {
+			log.Err(err).Str("peerAddr", n.myAddr).Msg("tagging failed")
+		}
 	}
 
 	return nil
@@ -239,7 +245,7 @@ func (n *node) HandleSearchRequestMessage(t types.Message, pkt transport.Packet)
 	peerBudgets := getPeerBudgets(peers, seachRequestMessage.Budget-1)
 	for peer, budget := range peerBudgets {
 		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarding search request message from %v to %v", pkt.Header.Source, peer)
-		err = n.forwardSearchRequestMessage(searchOrigin, peer, budget, *reg, requestID)
+		err = n.forwardSearchRequest(searchOrigin, peer, budget, *reg, requestID)
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msgf("couldn't forward search request from %v to %v", pkt.Header.Source, peer)
 		}

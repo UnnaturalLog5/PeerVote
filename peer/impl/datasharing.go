@@ -38,7 +38,7 @@ func (n *node) Upload(data io.Reader) (string, error) {
 			break
 		}
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 		// prevent zero-padding the last chunk
 		chunkData = chunkData[:bytesRead]
@@ -93,7 +93,10 @@ func (n *node) retrieveDataFromPeer(key string) ([]byte, error) {
 		// wait for answer
 		data, ok := n.notfify.WaitSingle(requestID, waitTime)
 		if ok {
-			chunk := data.([]byte)
+			chunk, ok := data.([]byte)
+			if !ok {
+				return make([]byte, 0), errors.New("peer answered with corrupted data")
+			}
 
 			if len(chunk) == 0 {
 				// remove peer from catalog for this chunk
@@ -107,8 +110,6 @@ func (n *node) retrieveDataFromPeer(key string) ([]byte, error) {
 		// if timer runs out
 		// resend with backoff
 		// in next iteration
-
-		return make([]byte, 0), nil
 	}
 
 	return make([]byte, 0), nil
@@ -177,10 +178,12 @@ func (n *node) searchPeers(reg regexp.Regexp, budget uint, timeout time.Duration
 	fileInfos := make([]types.FileInfo, 0)
 	for _, response := range responses {
 		// type assertion -> this could go wrong if unexpected data is sent
-		for _, fileInfo := range response.([]types.FileInfo) {
-			fileInfos = append(fileInfos, fileInfo)
-			// treat like set
+		responseFileInfos, ok := response.([]types.FileInfo)
+		if !ok {
+			continue
 		}
+
+		fileInfos = append(fileInfos, responseFileInfos...)
 	}
 
 	return fileInfos

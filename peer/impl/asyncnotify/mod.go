@@ -73,16 +73,16 @@ func (t *timers) WaitSingle(key string, timeout time.Duration) (any, bool) {
 
 func (t *timers) SetUpMultiple(timeout time.Duration) string {
 	c := make(chan any)
-	waitId := xid.New().String()
+	waitID := xid.New().String()
 
 	timerData := &timerData{
 		c:             c,
-		metaSearchKey: waitId,
+		metaSearchKey: waitID,
 		timeout:       timeout,
 	}
 
 	t.Lock()
-	t.timers[waitId] = timerData
+	t.timers[waitID] = timerData
 	t.Unlock()
 
 	// delete traces of search after
@@ -90,16 +90,16 @@ func (t *timers) SetUpMultiple(timeout time.Duration) string {
 		<-time.After(timeout)
 
 		t.Lock()
-		delete(t.timers, waitId)
+		delete(t.timers, waitID)
 		t.Unlock()
 	}()
 
-	return waitId
+	return waitID
 }
 
-func (t *timers) Register(waitId, key string) {
+func (t *timers) Register(waitID, key string) {
 	t.Lock()
-	timerData := t.timers[waitId]
+	timerData := t.timers[waitID]
 	timeout := timerData.timeout
 	t.timers[key] = timerData
 	t.Unlock()
@@ -114,9 +114,9 @@ func (t *timers) Register(waitId, key string) {
 	}()
 }
 
-func (t *timers) WaitMultiple(waitId string) []any {
+func (t *timers) WaitMultiple(waitID string) []any {
 	t.Lock()
-	timerData := t.timers[waitId]
+	timerData := t.timers[waitID]
 	timeout := timerData.timeout
 	c := timerData.c
 	t.Unlock()
