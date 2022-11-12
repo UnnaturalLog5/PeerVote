@@ -44,6 +44,7 @@ func (n *node) sendStatusMessageLoop() {
 			return
 		case <-n.statusTicker.C:
 			// send status message
+			log.Info().Str("peerAddr", n.myAddr).Msg("Sent heartbeat broadcast")
 			err := n.sendStatusMessageToRandomNeighbor()
 			if err != nil {
 				log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send status message")
@@ -64,7 +65,7 @@ func (n *node) sendHeartbeatLoop() {
 			return
 		case <-n.heartbeatTicker.C:
 			// send status message
-			log.Info().Str("peerAddr", n.myAddr).Msg("Send heartbeat broadcast")
+			log.Info().Str("peerAddr", n.myAddr).Msg("Sent heartbeat broadcast")
 
 			err := n.sendHeartbeat()
 			if err != nil {
@@ -107,6 +108,10 @@ func (n *node) Stop() error {
 		return errors.New("peer was not started - quitting.")
 	}
 
+	defer func() {
+		n.started = false
+	}()
+
 	// properly close all timers and channels
 	if n.conf.AntiEntropyInterval > 0 {
 		n.stopStatusTicker <- struct{}{}
@@ -123,17 +128,16 @@ func (n *node) Stop() error {
 	n.stopPeer <- struct{}{}
 	close(n.stopPeer)
 
-	log.Info().Str("peerAddr", n.myAddr).Msg("peer is shutting down")
+	log.Info().Str("peerAddr", n.myAddr).Msg("peer shut down")
 	return nil
 }
 
 func (n *node) handlePacket(pkt transport.Packet) {
 	// forward packet if it's not meant for this node
-	myAddr := n.conf.Socket.GetAddress()
 	dest := pkt.Header.Destination
-	if dest != myAddr {
+	if dest != n.myAddr {
 		to := n.routingTable.GetEntry(dest)
-		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarded packet meant for peer %v to %v", dest, to)
+		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarded packet %v meant for peer %v to %v", pkt.Header.PacketID, dest, to)
 
 		err := n.forward(dest, pkt)
 		if err != nil {
@@ -176,7 +180,7 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 	// should a node be able to change its own entry?
 	// probably not, but only after it has been set once!
 	// that first time is essential
-	if origin == n.conf.Socket.GetAddress() {
+	if origin == n.myAddr {
 		return
 	}
 

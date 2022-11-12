@@ -39,8 +39,6 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 	// set forward to true if there is a rumor we expected
 	forward := false
 	for _, rumor := range rumorsMessage.Rumors {
-		// update routing, but not if neighbor already
-		n.routingTable.SetEntry(rumor.Origin, pkt.Header.RelayedBy)
 
 		// is rumor expected?
 		// Store only works if the rumor is expected, otherwise an error is passed
@@ -50,6 +48,9 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 			log.Info().Str("peerAddr", n.myAddr).Msg("received unexpected rumor, skipping")
 			continue
 		}
+
+		// update routing, but not if neighbor already
+		n.routingTable.SetEntry(rumor.Origin, pkt.Header.RelayedBy)
 
 		forward = true
 
@@ -294,7 +295,7 @@ func (n *node) HandleStatusMessage(t types.Message, pkt transport.Packet) error 
 }
 
 func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMessage) error {
-	localStatus := n.rumorStore.StatusMessage()
+	localStatus := n.rumorStore.MakeStatusMessage()
 
 	sendStatus := false
 	continueMongering := true
@@ -341,7 +342,7 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 		log.Info().Str("peerAddr", n.myAddr).Msgf("sent statusMessage to %v to solicitate rumors", origin)
 	}
 
-	if len(rumorsToSend) != 0 {
+	if len(rumorsToSend) > 0 {
 		// send rumors to peer
 		_, err := n.sendRumors(origin, rumorsToSend)
 		if err != nil {
@@ -353,6 +354,7 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 	if continueMongering {
 		// send status message to random neighbor
 		if rand.Float64() < n.conf.ContinueMongering {
+			log.Info().Str("peerAddr", n.myAddr).Msgf("continue mongering, send status message to random neighbor")
 			err := n.sendStatusMessageToRandomNeighbor(origin)
 			if err != nil {
 				log.Info().Str("peerAddr", n.myAddr).Msgf("could not continue mongering, there is no more neighbor")

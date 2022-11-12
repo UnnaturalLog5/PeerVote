@@ -17,7 +17,7 @@ type RumorStore interface {
 	// Store only works if the rumor is expected, otherwise an error is passed
 	Store(rumor types.Rumor) error
 
-	StatusMessage() types.StatusMessage
+	MakeStatusMessage() types.StatusMessage
 }
 
 type store map[string][]types.Rumor
@@ -72,7 +72,7 @@ func (r *rumorStore) Store(rumor types.Rumor) error {
 	return nil
 }
 
-func (r *rumorStore) StatusMessage() types.StatusMessage {
+func (r *rumorStore) MakeStatusMessage() types.StatusMessage {
 	r.RLock()
 	defer r.RUnlock()
 

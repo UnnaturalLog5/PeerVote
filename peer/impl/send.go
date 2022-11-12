@@ -146,7 +146,7 @@ func (n *node) sendAck(pkt transport.Packet) error {
 
 	dest := pkt.Header.Source
 
-	status := types.StatusMessage(n.rumorStore.StatusMessage())
+	status := n.rumorStore.MakeStatusMessage()
 
 	ackMessage := types.AckMessage{
 		AckedPacketID: pkt.Header.PacketID,
@@ -197,7 +197,7 @@ func (n *node) sendStatusMessageToRandomNeighbor(forbiddenPeers ...string) error
 // send to random neighbor except ourselves
 // and the forbiddenPeers passed in
 func (n *node) sendStatusMessage(dest string) error {
-	statusMessage := n.rumorStore.StatusMessage()
+	statusMessage := n.rumorStore.MakeStatusMessage()
 
 	msg, err := marshalMessage(statusMessage)
 	if err != nil {
@@ -233,7 +233,6 @@ func (n *node) unicastDirect(dest string, msg transport.Message) error {
 }
 
 // sends rumors message to destination
-// returns the packet ID used so that the initiator may wait for an ack
 func (n *node) sendRumors(dest string, rumors []types.Rumor) (transport.Packet, error) {
 	rumorsMessage := types.RumorsMessage{Rumors: rumors}
 
@@ -379,7 +378,7 @@ func (n *node) sendSearchReplyMessage(searchOrigin, dest string, searchReplyMess
 	}
 
 	// send to destination
-	err = n.conf.Socket.Send(dest, pkt, 0)
+	err = n.route(dest, pkt)
 	if err != nil {
 		return err
 	}
@@ -392,8 +391,11 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 
 	_, ok := n.notfify.WaitSingle(pktID, n.conf.AckTimeout)
 	if ok {
+		log.Info().Str("peerAddr", n.myAddr).Msgf("received ack from %v", pkt.Header.Destination)
 		return
 	}
+
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("did not receive ack from %v - resending", pkt.Header.Destination)
 	// send message to another neighbor
 	// get another neighbor
 	randomNeighborAddr, ok := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Destination)
@@ -401,8 +403,7 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 		return
 	}
 
-	log.Info().Str("peerAddr", n.myAddr).
-		Msgf("timer expired - stopped waiting for ack for pkt %v, resending to %v instead", pktID, randomNeighborAddr)
+	// log.Warn().Str("peerAddr", n.myAddr).Msgf("did not receive ack from %v", pkt.Header.Destination)
 
 	newPkt := pkt.Copy()
 
@@ -415,12 +416,8 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 
 	newPkt.Header = &header
 
-	err := n.route(randomNeighborAddr, newPkt)
+	err := n.conf.Socket.Send(randomNeighborAddr, newPkt, 0)
 	if err != nil {
 		log.Err(err).Str("peerAddr", n.myAddr)
 	}
-}
-
-func (n *node) requestChunk(chunkHexKey, peer string) {
-
 }

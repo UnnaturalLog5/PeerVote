@@ -84,9 +84,6 @@ func (r *routingTable) GetRoutingTable() peer.RoutingTable {
 
 // Gets a random neighbor that is not the address passed
 func (r *routingTable) GetRandomNeighbor(forbiddenPeers ...string) (string, bool) {
-	r.RLock()
-	defer r.RUnlock()
-
 	neighborsList := r.GetNeighborsList(forbiddenPeers...)
 
 	// neighbors struct
