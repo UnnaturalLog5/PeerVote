@@ -1,10 +1,10 @@
 package routingtable
 
 import (
-	"errors"
 	"math/rand"
 	"sync"
 
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 )
 
@@ -24,7 +24,7 @@ type RoutingTable interface {
 
 	// Gets a random neighbor except those peers that are passed in
 	// returns an error, when no neighbor can be found
-	GetRandomNeighbor(forbiddenPeers ...string) (string, error)
+	GetRandomNeighbor(forbiddenPeers ...string) (string, bool)
 
 	// get all neighbors except the ones passed in as arguments
 	GetNeighborsList(forbiddenPeers ...string) []string
@@ -50,6 +50,7 @@ func (r *routingTable) SetEntry(origin, relayAddr string) {
 
 	// only update if not already neighbor
 	if origin != r.routingTable[origin] {
+		log.Info().Msgf("updating routing table entry %v, old: %v, new: %v", origin, r.routingTable[origin], relayAddr)
 		r.routingTable[origin] = relayAddr
 	}
 }
@@ -70,6 +71,8 @@ func (r *routingTable) RemoveEntry(origin string) {
 
 // Implements RoutingTable
 func (r *routingTable) GetRoutingTable() peer.RoutingTable {
+	r.RLock()
+	defer r.RUnlock()
 	routingTableCopy := make(peer.RoutingTable)
 
 	for k, v := range r.routingTable {
@@ -80,7 +83,7 @@ func (r *routingTable) GetRoutingTable() peer.RoutingTable {
 }
 
 // Gets a random neighbor that is not the address passed
-func (r *routingTable) GetRandomNeighbor(forbiddenPeers ...string) (string, error) {
+func (r *routingTable) GetRandomNeighbor(forbiddenPeers ...string) (string, bool) {
 	r.RLock()
 	defer r.RUnlock()
 
@@ -88,11 +91,11 @@ func (r *routingTable) GetRandomNeighbor(forbiddenPeers ...string) (string, erro
 
 	// neighbors struct
 	if len(neighborsList) == 0 {
-		return "", errors.New("could not get random neighbor, there is no suitable neighbor")
+		return "", false
 	}
 
 	randNeighborIdx := rand.Intn(len(neighborsList))
-	return neighborsList[randNeighborIdx], nil
+	return neighborsList[randNeighborIdx], true
 }
 
 // gets a list of neighbors without forbiddenPeers

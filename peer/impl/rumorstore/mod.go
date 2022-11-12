@@ -14,6 +14,7 @@ type RumorStore interface {
 
 	GetSequence(peer string) uint
 
+	// Store only works if the rumor is expected, otherwise an error is passed
 	Store(rumor types.Rumor) error
 
 	StatusMessage() types.StatusMessage

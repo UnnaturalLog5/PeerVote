@@ -91,7 +91,7 @@ func (n *node) retrieveDataFromPeer(key string) ([]byte, error) {
 		}
 
 		// wait for answer
-		data, ok := n.timers.WaitSingle(requestID, waitTime)
+		data, ok := n.notfify.WaitSingle(requestID, waitTime)
 		if ok {
 			chunk := data.([]byte)
 
@@ -151,14 +151,14 @@ func (n *node) Download(metahash string) ([]byte, error) {
 	return data.Bytes(), nil
 }
 
-func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) ([]string, error) {
+func (n *node) searchPeers(reg regexp.Regexp, budget uint, timeout time.Duration) []types.FileInfo {
 	// get peers
 	peers := n.routingTable.GetNeighborsList(n.myAddr)
 
 	// distribute search budget
 	peerBudgets := getPeerBudgets(peers, budget)
 
-	metaSearchKey := n.timers.SetUpMultiple(timeout)
+	metaSearchKey := n.notfify.SetUpMultiple(timeout)
 
 	// send requestmessage
 	for peer, budget := range peerBudgets {
@@ -168,26 +168,34 @@ func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) 
 		}
 
 		// register requestID
-		n.timers.Register(metaSearchKey, requestID)
+		n.notfify.Register(metaSearchKey, requestID)
 	}
 
 	// wait for responses
-	responses := n.timers.WaitMultiple(metaSearchKey)
+	responses := n.notfify.WaitMultiple(metaSearchKey)
 
-	namesSet := make(map[string]struct{}, 0)
-
-	// fileInfos := make([]types.FileInfo, 0)
+	fileInfos := make([]types.FileInfo, 0)
 	for _, response := range responses {
 		// type assertion -> this could go wrong if unexpected data is sent
-		for _, result := range response.([]types.FileInfo) {
-			// fileInfo := result.(types.FileInfo)
-			fileInfo := result
-
+		for _, fileInfo := range response.([]types.FileInfo) {
+			fileInfos = append(fileInfos, fileInfo)
 			// treat like set
-			namesSet[fileInfo.Name] = struct{}{}
 		}
 	}
 
+	return fileInfos
+}
+
+func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) ([]string, error) {
+	// perform search
+	fileInfos := n.searchPeers(reg, budget, timeout)
+
+	namesSet := make(map[string]struct{}, 0)
+	for _, fileInfo := range fileInfos {
+		namesSet[fileInfo.Name] = struct{}{}
+	}
+
+	// get all locally known names as well
 	n.namingStore.ForEach(func(name string, val []byte) bool {
 		// ignore this entry if the regex doesn't give any matches
 		if !reg.MatchString(name) {
@@ -207,7 +215,40 @@ func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) 
 	return names, nil
 }
 
+// return the name of a complete chunk
+func getCompleteChunk(fileInfos []types.FileInfo) (string, bool) {
+fileInfoLoop:
+	for _, fileInfo := range fileInfos {
+		for _, chunk := range fileInfo.Chunks {
+			if chunk == nil {
+				continue fileInfoLoop
+			}
+		}
+		return fileInfo.Name, true
+	}
+	return "", false
+}
+
 func (n *node) SearchFirst(pattern regexp.Regexp, conf peer.ExpandingRing) (string, error) {
+	localFileInfos := n.getFileInfos(pattern)
+
+	name, ok := getCompleteChunk(localFileInfos)
+	if ok {
+		return name, nil
+	}
+
+	for i := 0; i < int(conf.Retry); i++ {
+		budget := conf.Initial * uint(math.Pow(float64(conf.Factor), float64(i)))
+		fileInfos := n.searchPeers(pattern, budget, conf.Timeout)
+
+		// check for completeness of chunks
+		// interrupt only if a complete chunk is found
+		name, ok := getCompleteChunk(fileInfos)
+		if ok {
+			return name, nil
+		}
+	}
+
 	return "", nil
 }
 

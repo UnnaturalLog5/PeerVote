@@ -1,4 +1,4 @@
-package timers
+package asyncnotify
 
 import (
 	"sync"
@@ -7,27 +7,34 @@ import (
 	"github.com/rs/xid"
 )
 
-type Timers interface {
-	//
+// Two types of uses
+// 1. WaitSingle(key) for a single notification
+//
+// 2. WaitMultiple(metaSearchKey) for multiple notifications
+// Requires SetUpMultiple(..) to set up the search, generating a metaSearchKey
+// use Register(key, ..) to register a notification channel (usually packetID)
+//
+// Notify() and optionally send data, which is received by the waiter
+type AsyncNotify interface {
+	// Set up meta search
 	SetUpMultiple(timeout time.Duration) string
 
+	// register waiter, use this key to notify and send data
 	Register(metaSearchKey, key string)
 
-	// waits until the time expires or it is stopped
+	// waits until the time expires
 	// this operation is blocking
-	// returns data, true if the timer was stopped
-	//
-	// returns nil, false if the timer expired
-	//
-	// optionally receives data sent by stop function
+	// optionally receives data sent by Notify()
 	WaitMultiple(key string) []any
 
+	// waits until the time expires or it receives the first notification
+	// this operation is blocking
+	// optionally receives data sent by Notify()
 	WaitSingle(key string, timeout time.Duration) (any, bool)
 
-	// stops timer
+	// notify waiter
 	// optionally send data to waiting goroutine
-	// pass nil, to not send anything
-	Ping(key string, data ...any) bool
+	Notify(key string, data ...any) bool
 }
 
 type timerData struct {
@@ -41,7 +48,7 @@ type timers struct {
 	timers map[string]*timerData
 }
 
-func New() Timers {
+func New() AsyncNotify {
 	return &timers{
 		timers: make(map[string]*timerData),
 	}
@@ -78,6 +85,7 @@ func (t *timers) SetUpMultiple(timeout time.Duration) string {
 	t.timers[waitId] = timerData
 	t.Unlock()
 
+	// delete traces of search after
 	go func() {
 		<-time.After(timeout)
 
@@ -96,6 +104,7 @@ func (t *timers) Register(waitId, key string) {
 	t.timers[key] = timerData
 	t.Unlock()
 
+	// delete traces of search after
 	go func() {
 		<-time.After(timeout)
 
@@ -126,10 +135,11 @@ func (t *timers) WaitMultiple(waitId string) []any {
 	}
 }
 
-func (t *timers) Ping(key string, data ...any) bool {
+func (t *timers) Notify(key string, data ...any) bool {
 	t.Lock()
 	timerData, ok := t.timers[key]
 	if !ok {
+		t.Unlock()
 		// the timer did not exist
 		// it expired or was stopped
 		return false

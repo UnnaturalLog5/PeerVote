@@ -30,7 +30,6 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 		}
 	}()
 
-	// process rumor
 	rumorsMessage := types.RumorsMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &rumorsMessage)
 	if err != nil {
@@ -54,7 +53,7 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 
 		forward = true
 
-		// process rumor
+		// process rumor locally
 		rumorPkt := transport.Packet{
 			Header: pkt.Header,
 			Msg:    rumor.Msg,
@@ -67,15 +66,16 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 	}
 
 	if forward {
-		randomNeighborAddr, err := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Source)
-		if err != nil {
+		randomNeighborAddr, ok := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Source)
+		if !ok {
 			log.Warn().Str("peerAddr", n.myAddr).Msg("could not forward rumor, there is no more neighbor")
+			return nil
 		}
 
 		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarding rumor to %v", randomNeighborAddr)
 		_, err = n.sendRumors(randomNeighborAddr, rumorsMessage.Rumors)
 		if err != nil {
-			log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send missing rumors")
+			log.Err(err).Str("peerAddr", n.myAddr).Msgf("did not send missing rumors to %v", randomNeighborAddr)
 		}
 	}
 
@@ -95,7 +95,7 @@ func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
 
 	// if this ack was expected, clean up timer
 	pktID := ackMessage.AckedPacketID
-	ok := n.timers.Ping(pktID)
+	ok := n.notfify.Notify(pktID)
 	if ok {
 		// stopped an active timer
 		log.Info().Str("peerAddr", n.myAddr).Msgf("ack received - stopped waiting for ack for pkt %v", pktID)
@@ -126,7 +126,7 @@ func (n *node) HandleDataReplyMessage(t types.Message, pkt transport.Packet) err
 	requestID := dataReplyMessage.RequestID
 	data := dataReplyMessage.Value
 
-	ok := n.timers.Ping(requestID, data)
+	ok := n.notfify.Notify(requestID, data)
 	if !ok {
 		log.Info().Str("peerAddr", n.myAddr).Msgf("error sending data reply to waiting goroutine")
 	}
@@ -166,7 +166,7 @@ func (n *node) HandleSearchReplyMessage(t types.Message, pkt transport.Packet) e
 	responses := seachReplyMessage.Responses
 	requestID := seachReplyMessage.RequestID
 
-	n.timers.Ping(requestID, responses)
+	n.notfify.Notify(requestID, responses)
 
 	// update catalog
 	for _, fileInfo := range responses {
@@ -205,8 +205,29 @@ func (n *node) HandleSearchRequestMessage(t types.Message, pkt transport.Packet)
 	requestID := seachRequestMessage.RequestID
 
 	// check if already received
-	// if not store
-	// if yes: skip
+	_, requestKnown := n.knownRequests.Load(requestID)
+	if requestKnown {
+		return nil
+	}
+
+	// remember requestID
+	n.knownRequests.Store(requestID, struct{}{})
+
+	// get locally known files
+	fileInfos := n.getFileInfos(*reg)
+
+	// send search reply message
+	searchReplyMessage := types.SearchReplyMessage{
+		RequestID: requestID,
+		Responses: fileInfos,
+	}
+
+	searchOrigin := seachRequestMessage.Origin
+	sendTo := pkt.Header.Source
+	err = n.sendSearchReplyMessage(searchOrigin, sendTo, searchReplyMessage)
+	if err != nil {
+		return err
+	}
 
 	// keep packet
 	// just set origin and relayed by to this peer
@@ -217,26 +238,10 @@ func (n *node) HandleSearchRequestMessage(t types.Message, pkt transport.Packet)
 	peerBudgets := getPeerBudgets(peers, seachRequestMessage.Budget-1)
 	for peer, budget := range peerBudgets {
 		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarding search request message from %v to %v", pkt.Header.Source, peer)
-		origin := pkt.Header.Source
-		err = n.forwardSearchRequestMessage(origin, peer, budget, *reg, requestID)
+		err = n.forwardSearchRequestMessage(searchOrigin, peer, budget, *reg, requestID)
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msgf("couldn't forward search request from %v to %v", pkt.Header.Source, peer)
 		}
-	}
-
-	// get fileinfo
-	fileInfos := n.getFileInfos(*reg)
-
-	// send search reply message
-	searchReplyMessage := types.SearchReplyMessage{
-		RequestID: requestID,
-		Responses: fileInfos,
-	}
-
-	searchOrigin := seachRequestMessage.Origin
-	err = n.sendSearchReplyMessage(searchOrigin, searchReplyMessage)
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -342,13 +347,13 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send missing rumors")
 		}
-		log.Info().Str("peerAddr", n.myAddr).Msgf("sent missing rumors %v to %v", origin, rumorsToSend)
+		log.Info().Str("peerAddr", n.myAddr).Msgf("sent %v missing rumors to %v", len(rumorsToSend), origin)
 	}
 
 	if continueMongering {
 		// send status message to random neighbor
 		if rand.Float64() < n.conf.ContinueMongering {
-			err := n.sendStatusMessage("", origin)
+			err := n.sendStatusMessageToRandomNeighbor(origin)
 			if err != nil {
 				log.Info().Str("peerAddr", n.myAddr).Msgf("could not continue mongering, there is no more neighbor")
 			}

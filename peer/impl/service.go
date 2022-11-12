@@ -33,39 +33,45 @@ func (n *node) receiveLoop() {
 }
 
 func (n *node) sendStatusMessageLoop() {
-	go func() {
-		for {
-			select {
-			case <-n.stopStatusTicker:
-				return
-			case <-n.statusTicker.C:
-				// send status message
-				err := n.sendStatusMessage("")
-				if err != nil {
-					log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send status message")
-				}
+	err := n.sendStatusMessageToRandomNeighbor()
+	if err != nil {
+		log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send status message")
+	}
+
+	for {
+		select {
+		case <-n.stopStatusTicker:
+			return
+		case <-n.statusTicker.C:
+			// send status message
+			err := n.sendStatusMessageToRandomNeighbor()
+			if err != nil {
+				log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send status message")
 			}
 		}
-	}()
+	}
 }
 
 func (n *node) sendHeartbeatLoop() {
-	go func() {
-		for {
-			select {
-			case <-n.stopHeartbeatTicker:
-				return
-			case <-n.heartbeatTicker.C:
-				// send status message
-				log.Info().Str("peerAddr", n.myAddr).Msg("Send heartbeat broadcast")
+	err := n.sendHeartbeat()
+	if err != nil {
+		log.Err(err).Str("peerAddr", n.myAddr).Msg("error sending heartbeat message")
+	}
 
-				err := n.sendHeartbeat()
-				if err != nil {
-					log.Err(err).Str("peerAddr", n.myAddr).Msg("error sending heartbeat message")
-				}
+	for {
+		select {
+		case <-n.stopHeartbeatTicker:
+			return
+		case <-n.heartbeatTicker.C:
+			// send status message
+			log.Info().Str("peerAddr", n.myAddr).Msg("Send heartbeat broadcast")
+
+			err := n.sendHeartbeat()
+			if err != nil {
+				log.Err(err).Str("peerAddr", n.myAddr).Msg("error sending heartbeat message")
 			}
 		}
-	}()
+	}
 }
 
 // Start implements peer.Service
@@ -124,10 +130,12 @@ func (n *node) Stop() error {
 func (n *node) handlePacket(pkt transport.Packet) {
 	// forward packet if it's not meant for this node
 	myAddr := n.conf.Socket.GetAddress()
-	if pkt.Header.Destination != myAddr {
-		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarded packet meant for peer %v", pkt.Header.Destination)
+	dest := pkt.Header.Destination
+	if dest != myAddr {
+		to := n.routingTable.GetEntry(dest)
+		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarded packet meant for peer %v to %v", dest, to)
 
-		err := n.forward(pkt.Header.Destination, pkt)
+		err := n.forward(dest, pkt)
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msg("error forwarding packet")
 		}
@@ -136,7 +144,6 @@ func (n *node) handlePacket(pkt transport.Packet) {
 	}
 
 	// do something with the pkt
-	// log.Info().Str("peerAddr", n.myAddr).Msgf("received packet")
 	err := n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
 		log.Err(err).Str("peerAddr", n.myAddr).Msg("error handling packet")
@@ -149,8 +156,6 @@ func (n *node) AddPeer(addr ...string) {
 	for _, newAddr := range addr {
 		n.routingTable.SetEntry(newAddr, newAddr)
 	}
-
-	// n.sequenceStore. TODO add entry?
 }
 
 // GetRoutingTable implements peer.Messaging

@@ -87,15 +87,17 @@ func (n *node) Broadcast(msg transport.Message) error {
 
 	rumors := []types.Rumor{rumor}
 
-	randomNeighborAddr, err := n.routingTable.GetRandomNeighbor(n.myAddr)
-	if err != nil {
+	randomNeighborAddr, ok := n.routingTable.GetRandomNeighbor(n.myAddr)
+	if !ok {
 		log.Err(err).Str("peerAddr", n.myAddr).Msg("could not send broadcast")
+		// return err
+		return nil
 	}
 
 	pkt, err := n.sendRumors(randomNeighborAddr, rumors)
 	if err != nil {
 		log.Err(err).Str("peerAddr", n.myAddr).Msg("could not send broadcast")
-		return nil
+		// return err
 	}
 
 	if n.conf.AckTimeout > 0 {
@@ -176,25 +178,30 @@ func (n *node) sendAck(pkt transport.Packet) error {
 	return nil
 }
 
+func (n *node) sendStatusMessageToRandomNeighbor(forbiddenPeers ...string) error {
+	forbiddenPeers = append(forbiddenPeers, n.myAddr)
+	dest, ok := n.routingTable.GetRandomNeighbor(forbiddenPeers...)
+	if !ok {
+		return errors.New("no neighbor")
+	}
+
+	err := n.sendStatusMessage(dest)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // sends status message to a dest, or if set to ""
 // send to random neighbor except ourselves
 // and the forbiddenPeers passed in
-func (n *node) sendStatusMessage(dest string, forbiddenPeers ...string) error {
+func (n *node) sendStatusMessage(dest string) error {
 	statusMessage := n.rumorStore.StatusMessage()
 
 	msg, err := marshalMessage(statusMessage)
 	if err != nil {
 		return err
-	}
-
-	if dest == "" {
-		// send to random neighbor
-		// except ourselves and other forbiddenPeers
-		forbiddenPeers = append(forbiddenPeers, n.myAddr)
-		dest, err = n.routingTable.GetRandomNeighbor(forbiddenPeers...)
-		if err != nil {
-			return err
-		}
 	}
 
 	n.unicastDirect(dest, msg)
@@ -257,6 +264,7 @@ func (n *node) sendRumors(dest string, rumors []types.Rumor) (transport.Packet, 
 }
 
 func (n *node) sendHeartbeat() error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("broadcasting heartbeat message")
 	emptyMessage := types.EmptyMessage{}.NewEmpty()
 
 	msg, err := marshalMessage(emptyMessage)
@@ -350,14 +358,28 @@ func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Reg
 	return requestID, nil
 }
 
-func (n *node) sendSearchReplyMessage(peer string, searchReplyMessage types.SearchReplyMessage) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("sending search reply message to %v", peer)
+func (n *node) sendSearchReplyMessage(searchOrigin, dest string, searchReplyMessage types.SearchReplyMessage) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending search reply message to %v via %v", searchOrigin, dest)
 	msg, err := marshalMessage(searchReplyMessage)
 	if err != nil {
 		return err
 	}
 
-	err = n.unicastDirect(peer, msg)
+	// make header
+	header := transport.NewHeader(
+		n.myAddr,
+		n.myAddr,
+		searchOrigin,
+		0,
+	)
+
+	pkt := transport.Packet{
+		Header: &header,
+		Msg:    &msg,
+	}
+
+	// send to destination
+	err = n.conf.Socket.Send(dest, pkt, 0)
 	if err != nil {
 		return err
 	}
@@ -368,15 +390,14 @@ func (n *node) sendSearchReplyMessage(peer string, searchReplyMessage types.Sear
 func (n *node) waitForAckOrResend(pkt transport.Packet) {
 	pktID := pkt.Header.PacketID
 
-	_, ok := n.timers.WaitSingle(pktID, n.conf.AckTimeout)
+	_, ok := n.notfify.WaitSingle(pktID, n.conf.AckTimeout)
 	if ok {
 		return
 	}
 	// send message to another neighbor
 	// get another neighbor
-	randomNeighborAddr, err := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Destination)
-	if err != nil {
-		log.Err(err).Str("peerAddr", n.myAddr).Msg("timer expired - did not forward rumor")
+	randomNeighborAddr, ok := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Destination)
+	if !ok {
 		return
 	}
 
@@ -394,7 +415,7 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 
 	newPkt.Header = &header
 
-	err = n.route(randomNeighborAddr, newPkt)
+	err := n.route(randomNeighborAddr, newPkt)
 	if err != nil {
 		log.Err(err).Str("peerAddr", n.myAddr)
 	}

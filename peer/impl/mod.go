@@ -10,9 +10,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
+	"go.dedis.ch/cs438/peer/impl/asyncnotify"
 	"go.dedis.ch/cs438/peer/impl/routingtable"
 	"go.dedis.ch/cs438/peer/impl/rumorstore"
-	"go.dedis.ch/cs438/peer/impl/timers"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/types"
 )
@@ -70,7 +70,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	rumorStore := rumorstore.New()
 
-	timers := timers.New()
+	notify := asyncnotify.New()
 
 	dataBlobStore := conf.Storage.GetDataBlobStore()
 	namingStore := conf.Storage.GetNamingStore()
@@ -86,10 +86,11 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		myAddr:              myAddr,
 		rumorStore:          rumorStore,
 		stopHeartbeatTicker: stopHeartbeatTicker,
-		timers:              timers,
+		notfify:             notify,
 		dataBlobStore:       dataBlobStore,
 		namingStore:         namingStore,
 		catalog:             catalog,
+		knownRequests:       sync.Map{},
 	}
 
 	// register Callbacks
@@ -131,11 +132,13 @@ type node struct {
 	myAddr string
 
 	// maps from packet ID to timer
-	timers timers.Timers
+	notfify asyncnotify.AsyncNotify
 
 	// dataSharing entities
 	dataBlobStore storage.Store
 	namingStore   storage.Store
 	catalog       peer.Catalog
 	catalogMutex  sync.RWMutex
+
+	knownRequests sync.Map
 }
