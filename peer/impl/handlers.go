@@ -370,3 +370,114 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 
 	return nil
 }
+
+func (n *node) HandlePaxosPrepareMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Paxos Prepare from %v", pkt.Header.Source)
+
+	paxosPrepareMessage := types.PaxosPrepareMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &paxosPrepareMessage)
+	if err != nil {
+		return err
+	}
+
+	// ignore Paxos Prepare if it's from a different step
+	currentStep := n.multiPaxos.getCurrentStep()
+	if currentStep != paxosPrepareMessage.Step {
+		return nil
+	}
+
+	currentPaxosInstance, _ := n.multiPaxos.getCurrentPaxosInstance()
+
+	// ignore if the messages id is smaller or equal
+	if paxosPrepareMessage.ID <= currentPaxosInstance.MaxID {
+		return nil
+	}
+
+	// update current instance
+	currentPaxosInstance.MaxID = paxosPrepareMessage.ID
+	n.multiPaxos.updatePaxosInstance(currentStep, currentPaxosInstance)
+
+	dest := paxosPrepareMessage.Source
+	err = n.sendPaxosPromiseMessage(dest, paxosPrepareMessage)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) HandlePaxosPromiseMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Paxos Promise from %v", pkt.Header.Source)
+
+	paxosPromiseMessage := types.PaxosPromiseMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &paxosPromiseMessage)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) HandlePaxosProposeMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Paxos Propose from %v", pkt.Header.Source)
+
+	paxosProposeMessage := types.PaxosProposeMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &paxosProposeMessage)
+	if err != nil {
+		return err
+	}
+
+	// ignore Paxos Propose if it's from a different step
+	currentStep := n.multiPaxos.getCurrentStep()
+	if currentStep != paxosProposeMessage.Step {
+		return nil
+	}
+
+	currentPaxosInstance, _ := n.multiPaxos.getCurrentPaxosInstance()
+
+	// ignore if the messages id is different
+	if paxosProposeMessage.ID != currentPaxosInstance.MaxID {
+		return nil
+	}
+
+	// if (ID == max_id) // is the ID the largest I have seen so far?
+	//   proposal_accepted = true     // note that we accepted a proposal
+	//   accepted_ID = ID             // save the accepted proposal number
+	//   accepted_VALUE = VALUE       // save the accepted proposal data
+	//   respond: ACCEPTED(ID, VALUE) to the proposer and all learners
+
+	log.Info().Str("peerAddr", n.myAddr).Msgf("Accept ID %v for proposal %v", currentPaxosInstance.MaxID, paxosProposeMessage.ID)
+	// TODO check if matches
+
+	currentPaxosInstance.AcceptedValue = &paxosProposeMessage.Value
+	currentPaxosInstance.AcceptedID = paxosProposeMessage.ID
+	n.multiPaxos.updatePaxosInstance(currentStep, currentPaxosInstance)
+
+	n.sendPaxosAcceptMessage(paxosProposeMessage)
+
+	return nil
+}
+
+func (n *node) HandlePaxosAcceptMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Paxos Accept from %v", pkt.Header.Source)
+
+	paxosAcceptMessage := types.PaxosAcceptMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &paxosAcceptMessage)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) HandleTLCMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling TLC from %v", pkt.Header.Source)
+
+	TLCMessage := types.TLCMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &TLCMessage)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

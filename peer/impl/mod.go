@@ -77,6 +77,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	catalog := make(peer.Catalog)
 
+	multiPaxos := newMultiPaxos()
+
 	peer := node{
 		conf:                conf,
 		routingTable:        routingTable,
@@ -91,6 +93,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		namingStore:         namingStore,
 		catalog:             catalog,
 		knownRequests:       sync.Map{},
+		multiPaxos:          multiPaxos,
 	}
 
 	// register Callbacks
@@ -104,6 +107,11 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.DataRequestMessage{}, peer.HandleDataRequestMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, peer.HandleSearchReplyMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, peer.HandleSearchRequestMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.PaxosPrepareMessage{}, peer.HandlePaxosPrepareMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.PaxosPromiseMessage{}, peer.HandlePaxosPromiseMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.PaxosProposeMessage{}, peer.HandlePaxosProposeMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.PaxosAcceptMessage{}, peer.HandlePaxosAcceptMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.TLCMessage{}, peer.HandleTLCMessage)
 
 	return &peer
 }
@@ -141,4 +149,6 @@ type node struct {
 	catalogMutex  sync.RWMutex
 
 	knownRequests sync.Map
+
+	multiPaxos MultiPaxos
 }

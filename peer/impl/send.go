@@ -424,3 +424,73 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 		log.Err(err).Str("peerAddr", n.myAddr)
 	}
 }
+
+func (n *node) sendPaxosPromiseMessage(dest string, paxosPrepareMessage types.PaxosPrepareMessage) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Promise")
+	step := paxosPrepareMessage.Step
+
+	paxosPromiseMessage := types.PaxosPromiseMessage{
+		Step: step,
+		ID:   paxosPrepareMessage.ID,
+	}
+
+	paxosInstance, _ := n.multiPaxos.getPaxosInstance(step)
+
+	// if a value was already accepted, relay it
+	if paxosInstance.AcceptedValue != nil {
+		paxosPromiseMessage.AcceptedValue = paxosInstance.AcceptedValue
+		paxosPromiseMessage.AcceptedID = paxosInstance.AcceptedID
+	}
+
+	// send private message
+	paxosPromiseTransportMessage, err := marshalMessage(paxosPromiseMessage)
+	if err != nil {
+		return err
+	}
+
+	recipients := make(map[string]struct{})
+	recipients[dest] = struct{}{}
+
+	privateMessage := types.PrivateMessage{
+		Recipients: recipients,
+		Msg:        &paxosPromiseTransportMessage,
+	}
+
+	msg, err := marshalMessage(privateMessage)
+	if err != nil {
+		return err
+	}
+
+	err = n.Broadcast(msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) sendPaxosAcceptMessage(paxosProposeMessage types.PaxosProposeMessage) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Accept")
+	paxosAcceptMessage := types.PaxosAcceptMessage{
+		Step:  paxosProposeMessage.Step,
+		ID:    paxosProposeMessage.ID,
+		Value: paxosProposeMessage.Value,
+	}
+
+	msg, err := marshalMessage(paxosAcceptMessage)
+	if err != nil {
+		return err
+	}
+
+	err = n.Broadcast(msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) sendPaxosPrepareMessage() error {
+
+	return nil
+}
