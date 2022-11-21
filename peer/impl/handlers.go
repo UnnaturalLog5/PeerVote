@@ -380,25 +380,14 @@ func (n *node) HandlePaxosPrepareMessage(t types.Message, pkt transport.Packet) 
 		return err
 	}
 
-	// ignore Paxos Prepare if it's from a different step
-	currentStep := n.multiPaxos.getCurrentStep()
-	if currentStep != paxosPrepareMessage.Step {
+	paxosPromiseMessage, ok := n.multiPaxos.HandlePrepare(paxosPrepareMessage)
+	if !ok {
+		// ignore
 		return nil
 	}
-
-	currentPaxosInstance, _ := n.multiPaxos.getCurrentPaxosInstance()
-
-	// ignore if the messages id is smaller or equal
-	if paxosPrepareMessage.ID <= currentPaxosInstance.MaxID {
-		return nil
-	}
-
-	// update current instance
-	currentPaxosInstance.MaxID = paxosPrepareMessage.ID
-	n.multiPaxos.updatePaxosInstance(currentStep, currentPaxosInstance)
 
 	dest := paxosPrepareMessage.Source
-	err = n.sendPaxosPromiseMessage(dest, paxosPrepareMessage)
+	err = n.sendPaxosPromiseMessage(dest, paxosPromiseMessage)
 	if err != nil {
 		return err
 	}
@@ -415,6 +404,17 @@ func (n *node) HandlePaxosPromiseMessage(t types.Message, pkt transport.Packet) 
 		return err
 	}
 
+	paxosProposeMessage, ok := n.multiPaxos.HandlePromise(paxosPromiseMessage)
+	if !ok {
+		// ignore
+		return nil
+	}
+
+	err = n.sendPaxosProposeMessage(paxosProposeMessage)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -427,33 +427,16 @@ func (n *node) HandlePaxosProposeMessage(t types.Message, pkt transport.Packet) 
 		return err
 	}
 
-	// ignore Paxos Propose if it's from a different step
-	currentStep := n.multiPaxos.getCurrentStep()
-	if currentStep != paxosProposeMessage.Step {
+	paxosAcceptMessage, ok := n.multiPaxos.HandlePropose(paxosProposeMessage)
+	if !ok {
+		// ignore
 		return nil
 	}
 
-	currentPaxosInstance, _ := n.multiPaxos.getCurrentPaxosInstance()
-
-	// ignore if the messages id is different
-	if paxosProposeMessage.ID != currentPaxosInstance.MaxID {
-		return nil
+	err = n.sendPaxosAcceptMessage(paxosAcceptMessage)
+	if err != nil {
+		return err
 	}
-
-	// if (ID == max_id) // is the ID the largest I have seen so far?
-	//   proposal_accepted = true     // note that we accepted a proposal
-	//   accepted_ID = ID             // save the accepted proposal number
-	//   accepted_VALUE = VALUE       // save the accepted proposal data
-	//   respond: ACCEPTED(ID, VALUE) to the proposer and all learners
-
-	log.Info().Str("peerAddr", n.myAddr).Msgf("Accept ID %v for proposal %v", currentPaxosInstance.MaxID, paxosProposeMessage.ID)
-	// TODO check if matches
-
-	currentPaxosInstance.AcceptedValue = &paxosProposeMessage.Value
-	currentPaxosInstance.AcceptedID = paxosProposeMessage.ID
-	n.multiPaxos.updatePaxosInstance(currentStep, currentPaxosInstance)
-
-	n.sendPaxosAcceptMessage(paxosProposeMessage)
 
 	return nil
 }
@@ -466,6 +449,8 @@ func (n *node) HandlePaxosAcceptMessage(t types.Message, pkt transport.Packet) e
 	if err != nil {
 		return err
 	}
+
+	n.multiPaxos.HandleAccept(paxosAcceptMessage)
 
 	return nil
 }

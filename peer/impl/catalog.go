@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 
@@ -63,6 +64,16 @@ func (n *node) getPeersForData(key string) ([]string, bool) {
 func (n *node) Tag(name string, mh string) error {
 
 	mhBytes := []byte(mh)
+
+	mhBytesExisting := n.namingStore.Get(name)
+	if mhBytesExisting != nil {
+		return errors.New("metahash already exists")
+	}
+
+	ok := n.findPaxosConsensus(name, mh)
+	if !ok {
+		return errors.New("error finding consensus")
+	}
 
 	n.namingStore.Set(name, mhBytes)
 

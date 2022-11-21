@@ -77,7 +77,12 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	catalog := make(peer.Catalog)
 
-	multiPaxos := newMultiPaxos()
+	multiPaxos := newMultiPaxos(
+		conf.TotalPeers,
+		conf.PaxosID,
+		conf.PaxosThreshold,
+		conf.PaxosProposerRetry,
+	)
 
 	peer := node{
 		conf:                conf,
