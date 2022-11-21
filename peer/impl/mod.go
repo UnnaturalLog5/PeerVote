@@ -13,6 +13,7 @@ import (
 	"go.dedis.ch/cs438/peer/impl/asyncnotify"
 	"go.dedis.ch/cs438/peer/impl/routingtable"
 	"go.dedis.ch/cs438/peer/impl/rumorstore"
+	"go.dedis.ch/cs438/peer/paxos"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/types"
 )
@@ -77,7 +78,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	catalog := make(peer.Catalog)
 
-	multiPaxos := newMultiPaxos(
+	multiPaxos := paxos.NewMultiPaxos(
 		conf.TotalPeers,
 		conf.PaxosID,
 		conf.PaxosThreshold,
@@ -155,5 +156,5 @@ type node struct {
 
 	knownRequests sync.Map
 
-	multiPaxos MultiPaxos
+	multiPaxos paxos.MultiPaxos
 }
