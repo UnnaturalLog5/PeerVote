@@ -80,10 +80,10 @@ func (n *node) Broadcast(msg transport.Message) error {
 		Msg:    &msg,
 	}
 
-	err = n.conf.MessageRegistry.ProcessPacket(localPkt)
-	if err != nil {
-		return err
-	}
+	// err = n.conf.MessageRegistry.ProcessPacket(localPkt)
+	// if err != nil {
+	// 	return err
+	// }
 
 	rumors := []types.Rumor{rumor}
 
@@ -98,6 +98,11 @@ func (n *node) Broadcast(msg transport.Message) error {
 	if err != nil {
 		log.Err(err).Str("peerAddr", n.myAddr).Msg("could not send broadcast")
 		// return err
+	}
+
+	err = n.conf.MessageRegistry.ProcessPacket(localPkt)
+	if err != nil {
+		return err
 	}
 
 	if n.conf.AckTimeout > 0 {
@@ -425,7 +430,7 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 	}
 }
 
-func (n *node) sendPaxosPrepareMessage(step uint) error {
+func (n *node) sendPaxosPrepareMessage(paxosPrepareMessage types.PaxosPrepareMessage) error {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Prepare")
 
 	msg, err := marshalMessage(paxosPrepareMessage)

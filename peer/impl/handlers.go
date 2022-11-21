@@ -404,16 +404,7 @@ func (n *node) HandlePaxosPromiseMessage(t types.Message, pkt transport.Packet) 
 		return err
 	}
 
-	paxosProposeMessage, ok := n.multiPaxos.HandlePromise(paxosPromiseMessage)
-	if !ok {
-		// ignore
-		return nil
-	}
-
-	err = n.sendPaxosProposeMessage(paxosProposeMessage)
-	if err != nil {
-		return err
-	}
+	n.multiPaxos.HandlePromise(paxosPromiseMessage)
 
 	return nil
 }

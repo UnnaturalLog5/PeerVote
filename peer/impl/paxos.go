@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/types"
 )
 
@@ -30,6 +31,8 @@ type paxosInstance struct {
 	acceptedValue *types.PaxosValue
 
 	// for proposer
+
+	C chan struct{}
 
 	proposedValue *types.PaxosValue
 
@@ -58,10 +61,12 @@ func newMultiPaxos(totalPeers, paxosID uint, paxosThreshold func(uint) int, paxo
 
 type MultiPaxos interface {
 	HandlePrepare(paxosPrepareMessage types.PaxosPrepareMessage) (types.PaxosPromiseMessage, bool)
-	HandlePromise(promise types.PaxosPromiseMessage) (types.PaxosProposeMessage, bool)
+	HandlePromise(promise types.PaxosPromiseMessage)
 	HandlePropose(propose types.PaxosProposeMessage) (types.PaxosAcceptMessage, bool)
 	HandleAccept(accept types.PaxosAcceptMessage)
-	GetNextID() uint
+	PreparePaxos(source string) (types.PaxosPrepareMessage, bool)
+	ProposePaxos(filename, metahash string) types.PaxosProposeMessage
+	WaitForNextPhase(timeout time.Duration) bool
 }
 
 type multiPaxos struct {
@@ -76,11 +81,13 @@ type multiPaxos struct {
 	paxosProposerRetry time.Duration
 }
 
-func (mp *multiPaxos) GetNextID() uint {
-	mp.RLock()
-	defer mp.RUnlock()
-
+func (mp *multiPaxos) getNextID() uint {
 	_, paxosInstance := mp.getCurrent()
+
+	if paxosInstance.maxID == 0 {
+		return mp.paxosID
+	}
+
 	return paxosInstance.maxID + mp.totalPeers
 }
 
@@ -88,13 +95,57 @@ func (mp *multiPaxos) getCurrent() (uint, *paxosInstance) {
 	step := mp.tlc.step
 	_, ok := mp.paxosInstances[step]
 	if !ok {
-		mp.paxosInstances[step] = &paxosInstance{}
+		mp.paxosInstances[step] = &paxosInstance{
+			C:        make(chan struct{}),
+			promises: []types.PaxosPromiseMessage{},
+			accepts:  map[string][]types.PaxosAcceptMessage{},
+		}
 	}
 
 	return step, mp.paxosInstances[step]
 }
 
-// func (mp *multiPaxos) Start
+func (mp *multiPaxos) WaitForNextPhase(timeout time.Duration) bool {
+	mp.RLock()
+	_, paxosInstance := mp.getCurrent()
+	C := paxosInstance.C
+	mp.RUnlock()
+
+	for {
+		select {
+		case <-time.After(timeout):
+			log.Info().Msgf("wait timeout")
+			// retry
+			return false
+		case <-C:
+			// move paxos on to next round
+			return true
+		}
+	}
+}
+
+func (mp *multiPaxos) PreparePaxos(source string) (types.PaxosPrepareMessage, bool) {
+	mp.Lock()
+	defer mp.Unlock()
+
+	step, paxosInstance := mp.getCurrent()
+
+	// (to our knowledge) paxos is already going on
+	// when the max id is not zero
+	if paxosInstance.maxID != 0 {
+		return types.PaxosPrepareMessage{}, false
+	}
+
+	id := mp.getNextID()
+
+	prepare := types.PaxosPrepareMessage{
+		Step:   step,
+		ID:     id,
+		Source: source,
+	}
+
+	return prepare, true
+}
 
 func (mp *multiPaxos) HandlePrepare(prepare types.PaxosPrepareMessage) (types.PaxosPromiseMessage, bool) {
 	mp.Lock()
@@ -132,45 +183,55 @@ func (mp *multiPaxos) HandlePrepare(prepare types.PaxosPrepareMessage) (types.Pa
 	return promise, true
 }
 
-func (mp *multiPaxos) HandlePromise(promise types.PaxosPromiseMessage) (types.PaxosProposeMessage, bool) {
+func (mp *multiPaxos) HandlePromise(promise types.PaxosPromiseMessage) {
 	mp.Lock()
 	defer mp.Unlock()
 
 	// ignore Paxos Prepare if it's from a different step
 	currentStep, paxosInstance := mp.getCurrent()
 	if currentStep != promise.Step {
-		return types.PaxosProposeMessage{}, false
+		return
 	}
 
 	// ignore if proposer not in phase 1
 	if paxosInstance.phase != 1 {
-		return types.PaxosProposeMessage{}, false
-	}
-
-	if paxosInstance.promises == nil {
-		paxosInstance.promises = []types.PaxosPromiseMessage{}
+		return
 	}
 
 	paxosInstance.promises = append(paxosInstance.promises, promise)
 
 	// threshold reached?
-	if len(paxosInstance.promises) > mp.threshold {
-		// go to phase 2
-		paxosInstance.phase = 2
-
-		paxosProposeMessage := types.PaxosProposeMessage{
-			Step:  currentStep,
-			ID:    paxosInstance.maxID,
-			Value: *paxosInstance.proposedValue,
-		}
-
-		// notify originator to stop timeout
-
-		// broadcast propose message
-		return paxosProposeMessage, true
+	if len(paxosInstance.promises) >= mp.threshold {
+		// notify waiter
+		log.Info().Msgf("threshold of promises reached")
+		paxosInstance.C <- struct{}{}
 	}
 
-	return types.PaxosProposeMessage{}, false
+	return
+}
+
+func (mp *multiPaxos) ProposePaxos(filename, metahash string) types.PaxosProposeMessage {
+	id := xid.New().String()
+	value := types.PaxosValue{
+		UniqID:   id,
+		Metahash: metahash,
+		Filename: filename,
+	}
+
+	mp.Lock()
+	defer mp.Unlock()
+
+	step, paxosInstance := mp.getCurrent()
+
+	paxosInstance.proposedValue = &value
+
+	propose := types.PaxosProposeMessage{
+		Step:  step,
+		ID:    paxosInstance.maxID,
+		Value: value,
+	}
+
+	return propose
 }
 
 func (mp *multiPaxos) HandlePropose(propose types.PaxosProposeMessage) (types.PaxosAcceptMessage, bool) {
@@ -213,11 +274,6 @@ func (mp *multiPaxos) HandleAccept(accept types.PaxosAcceptMessage) {
 		return
 	}
 
-	// make sure map exists
-	if paxosInstance.accepts == nil {
-		paxosInstance.accepts = map[string][]types.PaxosAcceptMessage{}
-	}
-
 	// make sure this list exists
 	uniqID := accept.Value.UniqID
 	_, ok := paxosInstance.accepts[uniqID]
@@ -228,13 +284,12 @@ func (mp *multiPaxos) HandleAccept(accept types.PaxosAcceptMessage) {
 	// store
 	paxosInstance.accepts[uniqID] = append(paxosInstance.accepts[uniqID], accept)
 
-	// check if threshold is reached for anoy
+	// check if threshold is reached for any
 
 	for _, accepts := range paxosInstance.accepts {
-		if len(accepts) > mp.threshold {
-			// report back result
-			// stop timer
-			return
+		if len(accepts) >= mp.threshold {
+			// notify waiter
+			paxosInstance.C <- struct{}{}
 		}
 	}
 
@@ -246,34 +301,48 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 		return true
 	}
 
-	uniqID := xid.New().String()
-	value := types.PaxosValue{
-		UniqID:   uniqID,
-		Filename: filename,
-		Metahash: metahash,
+	// Phase 1
+	for {
+		// initialize round
+		prepare, ok := n.multiPaxos.PreparePaxos(n.myAddr)
+		if !ok {
+			return false
+		}
+
+		// send prepare
+		err := n.sendPaxosPrepareMessage(prepare)
+		if err != nil {
+			// todo error
+			return false
+		}
+
+		// wait for promises
+		// HandlePromise will notify this waiter
+		nextPhase := n.multiPaxos.WaitForNextPhase(n.conf.PaxosProposerRetry)
+		if nextPhase {
+			break
+		}
+		// retry after timeout if not successful
 	}
 
-	// step, currentPaxosInstance := n.multiPaxos.getCurrent()
-	// if currentPaxosInstance.maxID != 0 {
-	// paxos already working
-	// 	return // error
-	// }
+	// Phase 2
+	for {
+		propose := n.multiPaxos.ProposePaxos(filename, metahash)
 
-	// newPaxosInstance := paxosInstance{
-	// 	phase:         1,
-	// 	maxID:         n.conf.PaxosID,
-	// 	proposedValue: &value,
-	// }
+		err := n.sendPaxosProposeMessage(propose)
+		if err != nil {
+			// todo log error
+			return false
+		}
 
-	// n.multiPaxos.updatePaxosInstance(step, newPaxosInstance)
-
-	// send prepare
-	// wait for promises
-	// retry after timer if not successful
-
-	// send propose
-	// wait for accepts
-	// retry after timeout if not successful
+		// wait for accepts
+		// HandleAccept will notify this waiter
+		nextPhase := n.multiPaxos.WaitForNextPhase(n.conf.PaxosProposerRetry)
+		if nextPhase {
+			break
+		}
+		// retry after timeout if not successful
+	}
 
 	return true
 }
