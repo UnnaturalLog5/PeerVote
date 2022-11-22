@@ -75,6 +75,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	dataBlobStore := conf.Storage.GetDataBlobStore()
 	namingStore := conf.Storage.GetNamingStore()
+	blockStore := conf.Storage.GetBlockchainStore()
 
 	catalog := make(peer.Catalog)
 
@@ -100,6 +101,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		catalog:             catalog,
 		knownRequests:       sync.Map{},
 		multiPaxos:          multiPaxos,
+		blockStore:          blockStore,
 	}
 
 	// register Callbacks
@@ -156,5 +158,7 @@ type node struct {
 
 	knownRequests sync.Map
 
+	// paxos
 	multiPaxos paxos.MultiPaxos
+	blockStore storage.Store
 }

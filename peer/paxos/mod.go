@@ -9,37 +9,18 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-type tlc struct {
-	step        uint
-	tlcMessages map[uint]types.TLCMessage
-}
-
-func newTLC() tlc {
-	MessagesStore := make(map[uint]types.TLCMessage)
-	return tlc{
-		tlcMessages: MessagesStore,
-	}
-}
-
 type paxosInstance struct {
-	maxID      uint
-	acceptedID uint
-	phase      uint
-
-	// for acceptor
-
+	maxID         uint
+	acceptedID    uint
+	phase         uint
 	acceptedValue *types.PaxosValue
 
 	// for proposer
-
-	C chan struct{}
-
+	C             chan struct{}
 	proposedValue *types.PaxosValue
-
 	// Promise Messages
 	// maps from peer -> Promise
 	promises []types.PaxosPromiseMessage
-
 	// Accept Messages
 	// maps from uniqID -> Accept
 	accepts map[string][]types.PaxosAcceptMessage
@@ -47,11 +28,11 @@ type paxosInstance struct {
 
 func NewMultiPaxos(totalPeers, paxosID uint, paxosThreshold func(uint) int, paxosProposerRetry time.Duration) MultiPaxos {
 	PaxosInstances := make(map[uint]*paxosInstance)
-	tlc := newTLC()
 	threshold := paxosThreshold(totalPeers)
+	tlcMessages := make(map[uint][]types.TLCMessage)
 	return &multiPaxos{
 		paxosInstances:     PaxosInstances,
-		tlc:                tlc,
+		tlcMessages:        tlcMessages,
 		threshold:          threshold,
 		totalPeers:         totalPeers,
 		paxosID:            paxosID,
@@ -66,6 +47,7 @@ type MultiPaxos interface {
 	HandleAccept(accept types.PaxosAcceptMessage)
 	PreparePaxos(source string) (types.PaxosPrepareMessage, bool)
 	ProposePaxos(filename, metahash string) types.PaxosProposeMessage
+	// Blocking. Wait for a notification when a threshold of messages is reached (Promise or Accept)
 	WaitForNextPhase(timeout time.Duration) bool
 }
 
@@ -73,7 +55,9 @@ type multiPaxos struct {
 	sync.RWMutex
 	// paxos instances
 	paxosInstances map[uint]*paxosInstance
-	tlc            tlc
+	step           uint
+	// maps from step -> list of tlc messages (for that step)
+	tlcMessages map[uint][]types.TLCMessage
 
 	threshold          int
 	totalPeers         uint
@@ -92,7 +76,7 @@ func (mp *multiPaxos) getNextID() uint {
 }
 
 func (mp *multiPaxos) getCurrent() (uint, *paxosInstance) {
-	step := mp.tlc.step
+	step := mp.step
 	_, ok := mp.paxosInstances[step]
 	if !ok {
 		mp.paxosInstances[step] = &paxosInstance{
@@ -211,15 +195,15 @@ func (mp *multiPaxos) HandlePromise(promise types.PaxosPromiseMessage) {
 }
 
 func (mp *multiPaxos) ProposePaxos(filename, metahash string) types.PaxosProposeMessage {
+	mp.Lock()
+	defer mp.Unlock()
+
 	id := xid.New().String()
 	value := types.PaxosValue{
 		UniqID:   id,
 		Metahash: metahash,
 		Filename: filename,
 	}
-
-	mp.Lock()
-	defer mp.Unlock()
 
 	step, paxosInstance := mp.getCurrent()
 
@@ -235,6 +219,9 @@ func (mp *multiPaxos) ProposePaxos(filename, metahash string) types.PaxosPropose
 }
 
 func (mp *multiPaxos) HandlePropose(propose types.PaxosProposeMessage) (types.PaxosAcceptMessage, bool) {
+	mp.Lock()
+	defer mp.Unlock()
+
 	// ignore Paxos Propose if it's from a different step
 	step, paxosInstance := mp.getCurrent()
 	if step != propose.Step {
@@ -262,6 +249,9 @@ func (mp *multiPaxos) HandlePropose(propose types.PaxosProposeMessage) (types.Pa
 }
 
 func (mp *multiPaxos) HandleAccept(accept types.PaxosAcceptMessage) {
+	mp.Lock()
+	defer mp.Unlock()
+
 	// ignore Paxos Accept if it's from a different step
 	step, paxosInstance := mp.getCurrent()
 
@@ -288,6 +278,9 @@ func (mp *multiPaxos) HandleAccept(accept types.PaxosAcceptMessage) {
 
 	for _, accepts := range paxosInstance.accepts {
 		if len(accepts) >= mp.threshold {
+			// the waiter can read this value after being notified
+			paxosInstance.acceptedValue = &accepts[0].Value
+
 			// notify waiter
 			paxosInstance.C <- struct{}{}
 		}
@@ -295,3 +288,39 @@ func (mp *multiPaxos) HandleAccept(accept types.PaxosAcceptMessage) {
 
 	return
 }
+
+func (mp *multiPaxos) HandleTLC(TLCMessage types.TLCMessage) {
+	mp.Lock()
+	defer mp.Unlock()
+
+	step, _ := mp.getCurrent()
+
+	// ignore if the TLCMessage is "outdated"
+	if TLCMessage.Step < step {
+		return
+	}
+
+	_, ok := mp.tlcMessages[TLCMessage.Step]
+	if !ok {
+		mp.tlcMessages[TLCMessage.Step] = make([]types.TLCMessage, 0)
+	}
+
+	// store TLCMessage for the corresponding step
+	mp.tlcMessages[TLCMessage.Step] = append(mp.tlcMessages[TLCMessage.Step], TLCMessage)
+
+	// check if consensus has been reached for this step
+	tlcMessages := mp.tlcMessages[TLCMessage.Step]
+	if len(tlcMessages) >= mp.threshold {
+		// build blockchain block
+		// TODO
+		// update Name store
+		// shit, this is on the peer
+
+	}
+
+	return
+}
+
+// send TLC message
+// - when it observes consensus (i.e. threshold of accepts)
+// - when receiving threshold of TLC messages
