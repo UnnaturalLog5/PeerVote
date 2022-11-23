@@ -15,6 +15,7 @@ type paxosInstance struct {
 	acceptedValue *types.PaxosValue
 
 	// for proposer
+	isProposer    bool
 	C             chan struct{}
 	proposedValue *types.PaxosValue
 	// Promise Messages
@@ -100,6 +101,7 @@ func (n *node) PreparePaxos(source string) types.PaxosPrepareMessage {
 	// }
 
 	paxosInstance.phase = 1
+	paxosInstance.isProposer = true
 
 	id := n.getNextID()
 
@@ -170,7 +172,9 @@ func (n *node) HandlePromise(promise types.PaxosPromiseMessage) {
 	if len(paxosInstance.promises) >= n.threshold {
 		// notify waiter
 		log.Info().Str("peerAddr", n.myAddr).Msgf("threshold of promises reached")
-		paxosInstance.C <- struct{}{}
+		if paxosInstance.isProposer {
+			paxosInstance.C <- struct{}{}
+		}
 	}
 
 	return
@@ -267,8 +271,10 @@ func (n *node) HandleAccept(accept types.PaxosAcceptMessage) {
 			err := n.addBlock(block)
 			if err != nil {
 				// TODO maybe just log?
-				return
+				// return
 			}
+
+			n.step = step + 1
 
 			n.namingStore.Set(value.Filename, []byte(value.Metahash))
 
@@ -276,13 +282,15 @@ func (n *node) HandleAccept(accept types.PaxosAcceptMessage) {
 				err = n.sendTLCMessage(step, block)
 				if err != nil {
 					// TODO maybe just log?
-					return
+					// return
 				}
 				paxosInstance.tlcMessageSent = true
 			}
 
-			// notify waiter
-			paxosInstance.C <- struct{}{}
+			// notify waiter, but only if this node actually proposed anything
+			if paxosInstance.isProposer {
+				paxosInstance.C <- struct{}{}
+			}
 		}
 	}
 
@@ -351,31 +359,34 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 		return true
 	}
 
-	// Phase 1
-	for {
-		// initialize round
-		prepare := n.PreparePaxos(n.myAddr)
-		// log.Info().Str("peerAddr", n.myAddr).Msgf("id: %v", prepare.ID)
+	// check if paxos is happening and wait if it is
 
-		// send prepare
-		err := n.sendPaxosPrepareMessage(prepare)
-		if err != nil {
-			// todo error
-			// return false
+	for {
+		// Phase 1
+	Phase1:
+		for {
+			// initialize round
+			prepare := n.PreparePaxos(n.myAddr)
+			// log.Info().Str("peerAddr", n.myAddr).Msgf("id: %v", prepare.ID)
+
+			// send prepare
+			err := n.sendPaxosPrepareMessage(prepare)
+			if err != nil {
+				// todo error
+				// return false
+			}
+
+			// wait for promises
+			// HandlePromise will notify this waiter
+			nextPhase := n.WaitForNextPhase(n.conf.PaxosProposerRetry)
+			if nextPhase {
+				break Phase1
+			}
+			log.Info().Str("peerAddr", n.myAddr).Msgf("not enough promises - restarting paxos prepare!")
+			// retry after timeout if not successful
 		}
 
-		// wait for promises
-		// HandlePromise will notify this waiter
-		nextPhase := n.WaitForNextPhase(n.conf.PaxosProposerRetry)
-		if nextPhase {
-			break
-		}
-		log.Info().Str("peerAddr", n.myAddr).Msgf("trying again!")
-		// retry after timeout if not successful
-	}
-
-	// Phase 2
-	for {
+		// Phase 2
 		propose := n.ProposePaxos(filename, metahash)
 
 		err := n.sendPaxosProposeMessage(propose)
@@ -388,8 +399,10 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 		// HandleAccept will notify this waiter
 		success := n.WaitForNextPhase(n.conf.PaxosProposerRetry)
 		if success {
+			log.Info().Str("peerAddr", n.myAddr).Msgf("successfully reached consensus!")
 			break
 		}
+		log.Info().Str("peerAddr", n.myAddr).Msgf("not enough accepts - restarting paxos prepare!")
 		// retry after timeout if not successful
 	}
 

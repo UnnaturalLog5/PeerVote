@@ -51,6 +51,8 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 	hash.Write(newBlock.PrevHash)
 	blockHash := hash.Sum(nil)
 
+	newBlock.Hash = blockHash
+
 	buf, err := newBlock.Marshal()
 	if err != nil {
 		return err
