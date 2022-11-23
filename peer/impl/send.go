@@ -506,7 +506,7 @@ func (n *node) sendPaxosAcceptMessage(paxosAcceptMessage types.PaxosAcceptMessag
 	return nil
 }
 
-func (n *node) sendTLCMessage(step uint, block types.BlockchainBlock) error {
+func (n *node) sendTLCMessage(step uint, block types.BlockchainBlock) {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending TLC Message for step %v", step)
 
 	TLCMessage := types.TLCMessage{
@@ -516,13 +516,13 @@ func (n *node) sendTLCMessage(step uint, block types.BlockchainBlock) error {
 
 	msg, err := marshalMessage(TLCMessage)
 	if err != nil {
-		return err
+		return
 	}
 
 	err = n.Broadcast(msg)
 	if err != nil {
-		return err
+		return
 	}
 
-	return nil
+	return
 }

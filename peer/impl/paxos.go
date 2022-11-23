@@ -9,13 +9,6 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-type successMsg struct {
-	step          uint
-	phase         uint
-	success       bool
-	acceptedValue types.PaxosValue
-}
-
 type paxosInstance struct {
 	maxID         uint
 	acceptedID    uint
@@ -23,7 +16,7 @@ type paxosInstance struct {
 	acceptedValue *types.PaxosValue
 
 	// for proposer
-	C             chan successMsg
+	C             chan types.PaxosValue
 	proposedValue *types.PaxosValue
 	// Promise Messages
 	// maps from peer -> Promise
@@ -62,7 +55,7 @@ func (n *node) getPaxosInstance(step uint) *paxosInstance {
 	_, ok := n.paxosInstances[step]
 	if !ok {
 		n.paxosInstances[step] = &paxosInstance{
-			C:           make(chan successMsg, 2),
+			C:           make(chan types.PaxosValue, 5),
 			promises:    []types.PaxosPromiseMessage{},
 			accepts:     map[string][]types.PaxosAcceptMessage{},
 			tlcMessages: make([]types.TLCMessage, 0),
@@ -173,11 +166,7 @@ func (n *node) HandlePromise(promise types.PaxosPromiseMessage) {
 	if len(paxosInstance.promises) >= n.threshold {
 		// notify waiter
 		log.Warn().Str("peerAddr", n.myAddr).Msgf("threshold of promises reached step %v", n.step)
-		paxosInstance.C <- successMsg{
-			success: true,
-			phase:   1,
-			step:    n.step,
-		}
+		paxosInstance.C <- types.PaxosValue{}
 	}
 
 	return
@@ -336,20 +325,12 @@ func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
 		// send tlc message only for current step
 		if step == currentStep {
 			if !paxosInstance.tlcMessageSent {
-				err := n.sendTLCMessage(step, block)
-				if err != nil {
-					// TODO maybe just log?
-				}
+				go n.sendTLCMessage(step, block)
 				paxosInstance.tlcMessageSent = true
 			}
 
 			log.Info().Str("peerAddr", n.myAddr).Msgf("notify initiating goroutine")
-			paxosInstance.C <- successMsg{
-				success:       true,
-				phase:         2,
-				step:          n.step,
-				acceptedValue: block.Value,
-			}
+			paxosInstance.C <- block.Value
 
 		}
 
@@ -357,7 +338,7 @@ func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
 	}
 }
 
-func (n *node) WaitForNextPhase(timeout time.Duration, phase uint) (successMsg, bool) {
+func (n *node) WaitForNextPhase(timeout time.Duration) (types.PaxosValue, bool) {
 	n.paxosLock.RLock()
 	_, paxosInstance := n.getCurrent()
 	C := paxosInstance.C
@@ -368,16 +349,14 @@ func (n *node) WaitForNextPhase(timeout time.Duration, phase uint) (successMsg, 
 		case <-time.After(timeout):
 			log.Info().Str("peerAddr", n.myAddr).Msgf("wait timeout")
 			// retry
-			return successMsg{}, false
-		case successMsg := <-C:
-			return successMsg, true
+			return types.PaxosValue{}, false
+		case acceptedValue := <-C:
+			return acceptedValue, true
 		}
 	}
 }
 
 func (n *node) findPaxosConsensus(filename, metahash string) bool {
-	var successMsg successMsg
-	nextPhase := false
 	for {
 		// Phase 1
 	Phase1:
@@ -394,10 +373,7 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 
 			// wait for promises
 			// HandlePromise will notify this waiter
-			successMsg, nextPhase = n.WaitForNextPhase(n.conf.PaxosProposerRetry, 1)
-			if successMsg.phase == 0 {
-
-			}
+			_, nextPhase := n.WaitForNextPhase(n.conf.PaxosProposerRetry)
 			if nextPhase {
 				break Phase1
 			}
@@ -415,17 +391,9 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 
 		// wait for accepts
 		// HandleAccept will notify this waiter
-		successMsg, consensus := n.WaitForNextPhase(n.conf.PaxosProposerRetry, 1)
-		if consensus {
-			if successMsg.acceptedValue.Filename == filename && successMsg.acceptedValue.Metahash == metahash {
-				return true
-			}
+		acceptedValue, consensus := n.WaitForNextPhase(n.conf.PaxosProposerRetry)
+		if consensus && acceptedValue.Filename == filename && acceptedValue.Metahash == metahash {
+			return true
 		}
-		// log.Info().Str("peerAddr", n.myAddr).Msgf("step %v not enough accepts - restarting paxos prepare!", n.step)
-		// retry after timeout if not successful
 	}
-
-	// log.Info().Str("peerAddr", n.myAddr).Msgf("successfully reached consensus!")
-
-	// return true
 }
