@@ -44,7 +44,7 @@ func (n *node) sendStatusMessageLoop() {
 			return
 		case <-n.statusTicker.C:
 			// send status message
-			log.Info().Str("peerAddr", n.myAddr).Msg("Sent heartbeat broadcast")
+			// log.Info().Str("peerAddr", n.myAddr).Msg("Sent heartbeat broadcast")
 			err := n.sendStatusMessageToRandomNeighbor()
 			if err != nil {
 				log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send status message")

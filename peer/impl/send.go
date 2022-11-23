@@ -80,7 +80,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 		Msg:    &msg,
 	}
 
-	// err = n.conf.MessageRegistry.ProcessPacket(localPkt)
+	go n.conf.MessageRegistry.ProcessPacket(localPkt)
 	// if err != nil {
 	// 	return err
 	// }
@@ -100,10 +100,10 @@ func (n *node) Broadcast(msg transport.Message) error {
 		// return err
 	}
 
-	err = n.conf.MessageRegistry.ProcessPacket(localPkt)
-	if err != nil {
-		return err
-	}
+	// n.conf.MessageRegistry.ProcessPacket(localPkt)
+	// if err != nil {
+	// 	return err
+	// }
 
 	if n.conf.AckTimeout > 0 {
 		// wait for acknowledgement
@@ -147,7 +147,7 @@ func (n *node) route(dest string, pkt transport.Packet) error {
 }
 
 func (n *node) sendAck(pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("acknowledging receipt of pkt from %v", pkt.Header.Source)
+	// log.Info().Str("peerAddr", n.myAddr).Msgf("acknowledging receipt of pkt from %v", pkt.Header.Source)
 
 	dest := pkt.Header.Source
 
@@ -447,7 +447,7 @@ func (n *node) sendPaxosPrepareMessage(paxosPrepareMessage types.PaxosPrepareMes
 }
 
 func (n *node) sendPaxosPromiseMessage(dest string, paxosPromiseMessage types.PaxosPromiseMessage) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Promise")
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Promise to %v", dest)
 
 	// send private message
 	paxosPromiseTransportMessage, err := marshalMessage(paxosPromiseMessage)
@@ -494,6 +494,27 @@ func (n *node) sendPaxosAcceptMessage(paxosAcceptMessage types.PaxosAcceptMessag
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Accept")
 
 	msg, err := marshalMessage(paxosAcceptMessage)
+	if err != nil {
+		return err
+	}
+
+	err = n.Broadcast(msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) sendTLCMessage(step uint, block types.BlockchainBlock) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending TLC Message for step %v", step)
+
+	TLCMessage := types.TLCMessage{
+		Step:  step,
+		Block: block,
+	}
+
+	msg, err := marshalMessage(TLCMessage)
 	if err != nil {
 		return err
 	}

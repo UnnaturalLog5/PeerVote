@@ -13,7 +13,6 @@ import (
 	"go.dedis.ch/cs438/peer/impl/asyncnotify"
 	"go.dedis.ch/cs438/peer/impl/routingtable"
 	"go.dedis.ch/cs438/peer/impl/rumorstore"
-	"go.dedis.ch/cs438/peer/paxos"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/types"
 )
@@ -79,12 +78,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	catalog := make(peer.Catalog)
 
-	multiPaxos := paxos.NewMultiPaxos(
-		conf.TotalPeers,
-		conf.PaxosID,
-		conf.PaxosThreshold,
-		conf.PaxosProposerRetry,
-	)
+	paxosInstances := make(map[uint]*paxosInstance)
+	threshold := conf.PaxosThreshold(conf.TotalPeers)
 
 	peer := node{
 		conf:                conf,
@@ -100,8 +95,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		namingStore:         namingStore,
 		catalog:             catalog,
 		knownRequests:       sync.Map{},
-		multiPaxos:          multiPaxos,
 		blockStore:          blockStore,
+		paxosInstances:      paxosInstances,
+		threshold:           threshold,
 	}
 
 	// register Callbacks
@@ -130,6 +126,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 type node struct {
 	peer.Peer
 	peer.DataSharing
+
 	// sending a message on this channel will stop the node after it has been started
 	stopPeer chan struct{}
 	started  bool
@@ -159,6 +156,12 @@ type node struct {
 	knownRequests sync.Map
 
 	// paxos
-	multiPaxos paxos.MultiPaxos
+	MultiPaxos // interface of multipaxos functionality
+	paxosLock  sync.RWMutex
+	// paxos instances
+	threshold      int
+	paxosInstances map[uint]*paxosInstance
+	step           uint
+
 	blockStore storage.Store
 }

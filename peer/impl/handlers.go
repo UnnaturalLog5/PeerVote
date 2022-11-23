@@ -20,7 +20,7 @@ func (n *node) HandleChatMessage(t types.Message, pkt transport.Packet) error {
 
 // is type of registry.Exec
 func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling rumorsMessage from %v", pkt.Header.Source)
+	// log.Info().Str("peerAddr", n.myAddr).Msgf("handling rumorsMessage from %v", pkt.Header.Source)
 
 	// sendAck after processing rumors
 	defer func() {
@@ -45,7 +45,7 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 		err = n.rumorStore.Store(rumor)
 		if err != nil {
 			// rumor was unexpected -> skip processing
-			log.Info().Str("peerAddr", n.myAddr).Msg("received unexpected rumor, skipping")
+			// log.Info().Str("peerAddr", n.myAddr).Msg("received unexpected rumor, skipping")
 			continue
 		}
 
@@ -62,14 +62,14 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 
 		err := n.conf.MessageRegistry.ProcessPacket(rumorPkt)
 		if err != nil {
-			log.Err(err).Str("peerAddr", n.myAddr).Msg("could not process packet")
+			log.Err(err).Str("peerAddr", n.myAddr).Msg("could not locally process packet")
 		}
 	}
 
 	if forward {
 		randomNeighborAddr, ok := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Source)
 		if !ok {
-			log.Warn().Str("peerAddr", n.myAddr).Msg("could not forward rumor, there is no more neighbor")
+			// log.Warn().Str("peerAddr", n.myAddr).Msg("could not forward rumor, there is no more neighbor")
 			return nil
 		}
 
@@ -85,7 +85,7 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 
 // is type of registry.Exec
 func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling ack from %v", pkt.Header.Source)
+	// log.Info().Str("peerAddr", n.myAddr).Msgf("handling ack from %v", pkt.Header.Source)
 
 	// process rumor
 	ackMessage := types.AckMessage{}
@@ -283,7 +283,7 @@ func (n *node) HandlePrivateMessage(t types.Message, pkt transport.Packet) error
 
 // is type of registry.Exec
 func (n *node) HandleStatusMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling statusMessage from %v", pkt.Header.Source)
+	// log.Info().Str("peerAddr", n.myAddr).Msgf("handling statusMessage from %v", pkt.Header.Source)
 
 	// process rumor
 	statusMessage := types.StatusMessage{}
@@ -360,10 +360,10 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 	if continueMongering {
 		// send status message to random neighbor
 		if rand.Float64() < n.conf.ContinueMongering {
-			log.Info().Str("peerAddr", n.myAddr).Msgf("continue mongering, send status message to random neighbor")
+			// log.Info().Str("peerAddr", n.myAddr).Msgf("continue mongering, send status message to random neighbor")
 			err := n.sendStatusMessageToRandomNeighbor(origin)
 			if err != nil {
-				log.Info().Str("peerAddr", n.myAddr).Msgf("could not continue mongering, there is no more neighbor")
+				// log.Info().Str("peerAddr", n.myAddr).Msgf("could not continue mongering, there is no more neighbor")
 			}
 		}
 	}
@@ -380,7 +380,7 @@ func (n *node) HandlePaxosPrepareMessage(t types.Message, pkt transport.Packet) 
 		return err
 	}
 
-	paxosPromiseMessage, ok := n.multiPaxos.HandlePrepare(paxosPrepareMessage)
+	paxosPromiseMessage, ok := n.HandlePrepare(paxosPrepareMessage)
 	if !ok {
 		// ignore
 		return nil
@@ -404,7 +404,7 @@ func (n *node) HandlePaxosPromiseMessage(t types.Message, pkt transport.Packet) 
 		return err
 	}
 
-	n.multiPaxos.HandlePromise(paxosPromiseMessage)
+	n.HandlePromise(paxosPromiseMessage)
 
 	return nil
 }
@@ -418,7 +418,7 @@ func (n *node) HandlePaxosProposeMessage(t types.Message, pkt transport.Packet) 
 		return err
 	}
 
-	paxosAcceptMessage, ok := n.multiPaxos.HandlePropose(paxosProposeMessage)
+	paxosAcceptMessage, ok := n.HandlePropose(paxosProposeMessage)
 	if !ok {
 		// ignore
 		return nil
@@ -441,7 +441,7 @@ func (n *node) HandlePaxosAcceptMessage(t types.Message, pkt transport.Packet) e
 		return err
 	}
 
-	n.multiPaxos.HandleAccept(paxosAcceptMessage)
+	n.HandleAccept(paxosAcceptMessage)
 
 	return nil
 }
@@ -455,7 +455,10 @@ func (n *node) HandleTLCMessage(t types.Message, pkt transport.Packet) error {
 		return err
 	}
 
-	
+	err = n.HandleTLC(TLCMessage)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
