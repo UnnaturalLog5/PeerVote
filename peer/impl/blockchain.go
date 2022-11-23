@@ -12,8 +12,6 @@ import (
 )
 
 func (n *node) mintBlock(value types.PaxosValue) types.BlockchainBlock {
-	index := n.blockStore.Len()
-
 	prevHash := n.blockStore.Get(storage.LastBlockKey)
 	if prevHash == nil {
 		n.blockStore.Set(storage.LastBlockKey, make([]byte, 32))
@@ -21,7 +19,7 @@ func (n *node) mintBlock(value types.PaxosValue) types.BlockchainBlock {
 	prevHash = n.blockStore.Get(storage.LastBlockKey)
 
 	newBlock := types.BlockchainBlock{
-		Index:    uint(index),
+		Index:    n.step,
 		Hash:     []byte{},
 		Value:    value,
 		PrevHash: prevHash,
@@ -31,13 +29,29 @@ func (n *node) mintBlock(value types.PaxosValue) types.BlockchainBlock {
 }
 
 func (n *node) addBlock(newBlock types.BlockchainBlock) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("adding block %v", newBlock.Index)
+	prevHash := n.blockStore.Get(storage.LastBlockKey)
+	if prevHash == nil {
+		n.blockStore.Set(storage.LastBlockKey, make([]byte, 32))
+	}
+
 	lastBlockKey := n.blockStore.Get(storage.LastBlockKey)
 	lastBlockHash := hex.EncodeToString(lastBlockKey)
 	prevHashHex := hex.EncodeToString(newBlock.PrevHash)
 
+	// lastBlock := n.blockStore.Get((lastBlockHash))
+	log.Info().Str("peerAddr", n.myAddr).Msgf("---adding block with index %v for step %v as the %vth block", newBlock.Index, n.step, n.blockStore.Len())
+
+	// if n.step != newBlock.Index || n.step != uint(n.blockStore.Len()-1) {
+	// 	log.Info().Msg("false block")
+	// }
+
+	// if newBlock.Index >= 22 {
+	// 	log.Info().Msg("false block")
+
+	// }
+
 	// if it's not the first block, check that the previous hash fits
-	if lastBlockKey != nil && lastBlockHash != prevHashHex {
+	if lastBlockHash != prevHashHex {
 		// TODO
 		return errors.New("the same block was already added")
 	}
@@ -57,6 +71,8 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 	if err != nil {
 		return err
 	}
+
+	// update last block key so we can find the chain's head
 	n.blockStore.Set(storage.LastBlockKey, blockHash)
 
 	hexHash := hex.EncodeToString(blockHash)
