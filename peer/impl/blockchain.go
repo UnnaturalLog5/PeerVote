@@ -20,10 +20,20 @@ func (n *node) mintBlock(value types.PaxosValue) types.BlockchainBlock {
 
 	newBlock := types.BlockchainBlock{
 		Index:    n.step,
-		Hash:     []byte{},
 		Value:    value,
 		PrevHash: prevHash,
 	}
+
+	// H = sha256(Index || v.UniqID || v.Filename || v.Metahash || Prevhash)
+	hash := crypto.SHA256.New()
+	hash.Write([]byte(strconv.Itoa(int(newBlock.Index))))
+	hash.Write([]byte(newBlock.Value.UniqID))
+	hash.Write([]byte(newBlock.Value.Filename))
+	hash.Write([]byte(newBlock.Value.Metahash))
+	hash.Write(newBlock.PrevHash)
+	blockHash := hash.Sum(nil)
+
+	newBlock.Hash = blockHash
 
 	return newBlock
 }
@@ -39,16 +49,7 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 	prevHashHex := hex.EncodeToString(newBlock.PrevHash)
 
 	// lastBlock := n.blockStore.Get((lastBlockHash))
-	log.Info().Str("peerAddr", n.myAddr).Msgf("---adding block with index %v for step %v as the %vth block", newBlock.Index, n.step, n.blockStore.Len())
-
-	// if n.step != newBlock.Index || n.step != uint(n.blockStore.Len()-1) {
-	// 	log.Info().Msg("false block")
-	// }
-
-	// if newBlock.Index >= 22 {
-	// 	log.Info().Msg("false block")
-
-	// }
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("---adding block with index %v for step %v as the %vth block", newBlock.Index, n.step, n.blockStore.Len())
 
 	// if it's not the first block, check that the previous hash fits
 	if lastBlockHash != prevHashHex {
@@ -56,28 +57,16 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 		return errors.New("the same block was already added")
 	}
 
-	// H = sha256(Index || v.UniqID || v.Filename || v.Metahash || Prevhash)
-	hash := crypto.SHA256.New()
-	hash.Write([]byte(strconv.Itoa(int(newBlock.Index))))
-	hash.Write([]byte(newBlock.Value.UniqID))
-	hash.Write([]byte(newBlock.Value.Filename))
-	hash.Write([]byte(newBlock.Value.Metahash))
-	hash.Write(newBlock.PrevHash)
-	blockHash := hash.Sum(nil)
-
-	newBlock.Hash = blockHash
-
 	buf, err := newBlock.Marshal()
 	if err != nil {
 		return err
 	}
 
 	// update last block key so we can find the chain's head
-	n.blockStore.Set(storage.LastBlockKey, blockHash)
-
-	hexHash := hex.EncodeToString(blockHash)
+	n.blockStore.Set(storage.LastBlockKey, newBlock.Hash)
 
 	// store using hex encoded hash
+	hexHash := hex.EncodeToString(newBlock.Hash)
 	n.blockStore.Set(hexHash, buf)
 
 	return nil

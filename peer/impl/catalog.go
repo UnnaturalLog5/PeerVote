@@ -63,19 +63,20 @@ func (n *node) getPeersForData(key string) ([]string, bool) {
 
 func (n *node) Tag(name string, mh string) error {
 
-	mhBytes := []byte(mh)
-
 	mhBytesExisting := n.namingStore.Get(name)
 	if mhBytesExisting != nil {
 		return errors.New("metahash already exists")
+	}
+
+	if n.conf.TotalPeers == 1 {
+		n.namingStore.Set(name, []byte(mh))
+		return nil
 	}
 
 	ok := n.findPaxosConsensus(name, mh)
 	if !ok {
 		return errors.New("error finding consensus")
 	}
-
-	n.namingStore.Set(name, mhBytes)
 
 	return nil
 }

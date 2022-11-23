@@ -99,7 +99,7 @@ func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
 	ok := n.notfify.Notify(pktID)
 	if ok {
 		// stopped an active timer
-		log.Info().Str("peerAddr", n.myAddr).Msgf("ack received - stopped waiting for ack for pkt %v", pktID)
+		// log.Info().Str("peerAddr", n.myAddr).Msgf("ack received - stopped waiting for ack for pkt %v", pktID)
 	}
 
 	err = n.processStatusMessage(pkt.Header.Source, ackMessage.Status)
@@ -354,7 +354,7 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send missing rumors")
 		}
-		log.Info().Str("peerAddr", n.myAddr).Msgf("sent %v missing rumors to %v", len(rumorsToSend), origin)
+		// log.Info().Str("peerAddr", n.myAddr).Msgf("sent %v missing rumors to %v", len(rumorsToSend), origin)
 	}
 
 	if continueMongering {
