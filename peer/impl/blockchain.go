@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/types"
 )
@@ -48,12 +47,8 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 	lastBlockHash := hex.EncodeToString(lastBlockKey)
 	prevHashHex := hex.EncodeToString(newBlock.PrevHash)
 
-	// lastBlock := n.blockStore.Get((lastBlockHash))
-	log.Warn().Str("peerAddr", n.myAddr).Msgf("---adding block with index %v for step %v as the %vth block", newBlock.Index, n.step, n.blockStore.Len())
-
 	// if it's not the first block, check that the previous hash fits
 	if lastBlockHash != prevHashHex {
-		// TODO
 		return errors.New("the same block was already added")
 	}
 

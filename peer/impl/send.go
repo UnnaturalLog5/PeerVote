@@ -80,10 +80,12 @@ func (n *node) Broadcast(msg transport.Message) error {
 		Msg:    &msg,
 	}
 
-	go n.conf.MessageRegistry.ProcessPacket(localPkt)
-	// if err != nil {
-	// 	return err
-	// }
+	go func() {
+		err := n.conf.MessageRegistry.ProcessPacket(localPkt)
+		if err != nil {
+			log.Err(err).Str("peerAddr", n.myAddr)
+		}
+	}()
 
 	rumors := []types.Rumor{rumor}
 
@@ -523,6 +525,4 @@ func (n *node) sendTLCMessage(step uint, block types.BlockchainBlock) {
 	if err != nil {
 		return
 	}
-
-	return
 }

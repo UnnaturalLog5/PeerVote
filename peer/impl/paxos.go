@@ -16,8 +16,7 @@ type paxosInstance struct {
 	acceptedValue *types.PaxosValue
 
 	// for proposer
-	C             chan types.PaxosValue
-	proposedValue *types.PaxosValue
+	C chan types.PaxosValue
 	// Promise Messages
 	// maps from peer -> Promise
 	promises []types.PaxosPromiseMessage
@@ -168,8 +167,6 @@ func (n *node) HandlePromise(promise types.PaxosPromiseMessage) {
 		log.Warn().Str("peerAddr", n.myAddr).Msgf("threshold of promises reached step %v", n.step)
 		paxosInstance.C <- types.PaxosValue{}
 	}
-
-	return
 }
 
 func (n *node) ProposePaxos(filename, metahash string) types.PaxosProposeMessage {
@@ -180,7 +177,7 @@ func (n *node) ProposePaxos(filename, metahash string) types.PaxosProposeMessage
 
 	paxosInstance.phase = 2
 
-	value := types.PaxosValue{}
+	var value types.PaxosValue
 
 	if paxosInstance.acceptedValue != nil {
 		value = *paxosInstance.acceptedValue
@@ -222,11 +219,7 @@ func (n *node) HandlePropose(propose types.PaxosProposeMessage) (types.PaxosAcce
 	paxosInstance.acceptedValue = &propose.Value
 	paxosInstance.acceptedID = propose.ID
 
-	paxosAcceptMessage := types.PaxosAcceptMessage{
-		Step:  propose.Step,
-		ID:    propose.ID,
-		Value: propose.Value,
-	}
+	paxosAcceptMessage := types.PaxosAcceptMessage(propose)
 
 	return paxosAcceptMessage, true
 }
@@ -267,8 +260,6 @@ func (n *node) HandleAccept(accept types.PaxosAcceptMessage) {
 			}
 		}
 	}
-
-	return
 }
 
 func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
@@ -301,18 +292,13 @@ func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
 			// only keep catching up as long as all the previous instances have reached their threshold
 			return nil
 		}
-		if step != currentStep {
-			log.Warn().Str("peerAddr", n.myAddr).Msgf("catching up! step %v", step)
-			// TODO remove
-		}
 
 		log.Info().Str("peerAddr", n.myAddr).Msgf("threshold of TLC messages for step %v", step)
 		block := paxosInstance.tlcMessages[0].Block
 
 		err := n.addBlock(block)
 		if err != nil {
-			// TODO maybe just log?
-			return nil
+			return err
 		}
 
 		n.step = step + 1
@@ -334,7 +320,7 @@ func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
 
 		}
 
-		step += 1
+		step++
 	}
 }
 
@@ -367,8 +353,7 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 			// send prepare
 			err := n.sendPaxosPrepareMessage(prepare)
 			if err != nil {
-				// todo error
-				// return false
+				continue
 			}
 
 			// wait for promises
@@ -386,7 +371,7 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 
 		err := n.sendPaxosProposeMessage(propose)
 		if err != nil {
-			// todo log error
+			continue
 		}
 
 		// wait for accepts

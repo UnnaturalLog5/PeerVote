@@ -96,11 +96,7 @@ func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
 
 	// if this ack was expected, clean up timer
 	pktID := ackMessage.AckedPacketID
-	ok := n.notfify.Notify(pktID)
-	if ok {
-		// stopped an active timer
-		// log.Info().Str("peerAddr", n.myAddr).Msgf("ack received - stopped waiting for ack for pkt %v", pktID)
-	}
+	n.notfify.Notify(pktID)
 
 	err = n.processStatusMessage(pkt.Header.Source, ackMessage.Status)
 	if err != nil {
@@ -354,7 +350,6 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send missing rumors")
 		}
-		// log.Info().Str("peerAddr", n.myAddr).Msgf("sent %v missing rumors to %v", len(rumorsToSend), origin)
 	}
 
 	if continueMongering {
@@ -363,7 +358,8 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 			// log.Info().Str("peerAddr", n.myAddr).Msgf("continue mongering, send status message to random neighbor")
 			err := n.sendStatusMessageToRandomNeighbor(origin)
 			if err != nil {
-				// log.Info().Str("peerAddr", n.myAddr).Msgf("could not continue mongering, there is no more neighbor")
+				log.Err(err).Str("peerAddr", n.myAddr)
+				return nil
 			}
 		}
 	}
