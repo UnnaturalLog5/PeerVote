@@ -22,10 +22,10 @@ type paxosInstance struct {
 	Phase2C       chan types.PaxosValue
 	// Promise Messages
 	// maps from peer -> Promise
-	promises map[string]types.PaxosPromiseMessage
+	promises map[uint][]types.PaxosPromiseMessage
 	// Accept Messages
 	// maps from peer -> Accept
-	accepts map[string]types.PaxosAcceptMessage
+	accepts map[uint][]types.PaxosAcceptMessage
 
 	// list of tlc messages (for that step)
 	tlcMessages    []types.TLCMessage
@@ -59,8 +59,8 @@ func (n *node) getPaxosInstance(step uint) *paxosInstance {
 		n.paxosInstances[step] = &paxosInstance{
 			Phase2C:     make(chan types.PaxosValue, 5),
 			Phase1C:     make(chan struct{}, 5),
-			promises:    map[string]types.PaxosPromiseMessage{},
-			accepts:     map[string]types.PaxosAcceptMessage{},
+			promises:    map[uint][]types.PaxosPromiseMessage{},
+			accepts:     map[uint][]types.PaxosAcceptMessage{},
 			tlcMessages: make([]types.TLCMessage, 0),
 		}
 	}
@@ -169,11 +169,13 @@ func (n *node) HandlePromise(from string, promise types.PaxosPromiseMessage) {
 		paxosInstance.acceptedValue = promise.AcceptedValue
 		paxosInstance.acceptedID = promise.AcceptedID
 	}
-	paxosInstance.maxID = promise.ID
-	paxosInstance.promises[from] = promise
+
+	id := paxosInstance.maxID
+	// store
+	paxosInstance.promises[id] = append(paxosInstance.promises[id], promise)
 
 	// threshold reached?
-	if uint(len(paxosInstance.promises)) >= n.threshold {
+	if uint(len(paxosInstance.promises[id])) >= n.threshold {
 		// notify waiter
 		log.Warn().Str("peerAddr", n.myAddr).Msgf("threshold of promises reached step %v", n.step)
 		paxosInstance.Phase1C <- struct{}{}
@@ -191,7 +193,7 @@ func (n *node) ProposePaxos() types.PaxosProposeMessage {
 	var value *types.PaxosValue
 
 	highestID := uint(0)
-	for _, promise := range paxosInstance.promises {
+	for _, promise := range paxosInstance.promises[paxosInstance.maxID] {
 		if highestID > promise.AcceptedID {
 			value = promise.AcceptedValue
 			highestID = promise.AcceptedID
@@ -266,11 +268,12 @@ func (n *node) HandleAccept(from string, accept types.PaxosAcceptMessage) {
 	}
 
 	// store
-	paxosInstance.accepts[from] = accept
+	id := paxosInstance.maxID
+	paxosInstance.accepts[id] = append(paxosInstance.accepts[id], accept)
 
 	countByUniqID := map[string]uint{}
 	// group by uniqID
-	for _, accept := range paxosInstance.accepts {
+	for _, accept := range paxosInstance.accepts[id] {
 		value := accept.Value
 		countByUniqID[value.UniqID]++
 	}
@@ -281,7 +284,7 @@ func (n *node) HandleAccept(from string, accept types.PaxosAcceptMessage) {
 			// the waiter can read this value after being notified
 
 			// check for which uniqid the threshold was reached
-			for _, accept := range paxosInstance.accepts {
+			for _, accept := range paxosInstance.accepts[id] {
 				if uniqID == accept.Value.UniqID {
 					value := accept.Value
 					paxosInstance.acceptedValue = &value
@@ -453,7 +456,7 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 		// wait for accepts
 		// HandleAccept will notify this waiter
 		acceptedValue, consensus := n.WaitForAccepts(n.conf.PaxosProposerRetry)
-		if consensus && acceptedValue.UniqID == propose.Value.UniqID {
+		if consensus && acceptedValue.UniqID == proposeValue.UniqID {
 			return true
 		}
 		log.Info().Str("peerAddr", n.myAddr).Msgf("%v", n.step)

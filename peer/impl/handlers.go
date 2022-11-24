@@ -54,7 +54,7 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 
 		forward = true
 
-		pkt.Header.Source = rumor.Origin
+		// pkt.Header.Source = rumor.Origin
 
 		// process rumor locally
 		rumorPkt := transport.Packet{
