@@ -54,15 +54,21 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 
 		forward = true
 
+		pkt.Header.Source = rumor.Origin
+
 		// process rumor locally
 		rumorPkt := transport.Packet{
 			Header: pkt.Header,
 			Msg:    rumor.Msg,
 		}
 
+		if n.myAddr == "127.0.0.1:3" && rumor.Origin == "127.0.0.1:2" && rumor.Msg.Type != "private" {
+			log.Err(err).Str("peerAddr", n.myAddr).Msg("rumor could not locally process packet")
+		}
+
 		err := n.conf.MessageRegistry.ProcessPacket(rumorPkt)
 		if err != nil {
-			log.Err(err).Str("peerAddr", n.myAddr).Msg("could not locally process packet")
+			log.Err(err).Str("peerAddr", n.myAddr).Msg("rumor could not locally process packet")
 		}
 	}
 
@@ -400,7 +406,7 @@ func (n *node) HandlePaxosPromiseMessage(t types.Message, pkt transport.Packet) 
 		return err
 	}
 
-	n.HandlePromise(paxosPromiseMessage)
+	n.HandlePromise(pkt.Header.Source, paxosPromiseMessage)
 
 	return nil
 }
@@ -414,7 +420,7 @@ func (n *node) HandlePaxosProposeMessage(t types.Message, pkt transport.Packet) 
 		return err
 	}
 
-	paxosAcceptMessage, ok := n.HandlePropose(paxosProposeMessage)
+	paxosAcceptMessage, ok := n.HandlePropose(pkt.Header.Source, paxosProposeMessage)
 	if !ok {
 		// ignore
 		return nil
@@ -437,7 +443,7 @@ func (n *node) HandlePaxosAcceptMessage(t types.Message, pkt transport.Packet) e
 		return err
 	}
 
-	n.HandleAccept(paxosAcceptMessage)
+	n.HandleAccept(pkt.Header.Source, paxosAcceptMessage)
 
 	return nil
 }
@@ -451,7 +457,7 @@ func (n *node) HandleTLCMessage(t types.Message, pkt transport.Packet) error {
 		return err
 	}
 
-	err = n.HandleTLC(TLCMessage)
+	err = n.HandleTLC(pkt.Header.Source, TLCMessage)
 	if err != nil {
 		return err
 	}

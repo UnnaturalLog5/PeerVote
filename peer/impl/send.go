@@ -493,7 +493,7 @@ func (n *node) sendPaxosProposeMessage(paxosProposeMessage types.PaxosProposeMes
 }
 
 func (n *node) sendPaxosAcceptMessage(paxosAcceptMessage types.PaxosAcceptMessage) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Accept")
+	// log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Accept")
 
 	msg, err := marshalMessage(paxosAcceptMessage)
 	if err != nil {

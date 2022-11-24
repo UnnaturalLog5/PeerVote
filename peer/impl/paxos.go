@@ -1,7 +1,8 @@
 package impl
 
 import (
-	"math"
+	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/rs/xid"
@@ -16,13 +17,15 @@ type paxosInstance struct {
 	acceptedValue *types.PaxosValue
 
 	// for proposer
-	C chan types.PaxosValue
+	proposedValue *types.PaxosValue
+	Phase1C       chan struct{}
+	Phase2C       chan types.PaxosValue
 	// Promise Messages
 	// maps from peer -> Promise
-	promises []types.PaxosPromiseMessage
+	promises map[string]types.PaxosPromiseMessage
 	// Accept Messages
-	// maps from uniqID -> Accept
-	accepts map[string][]types.PaxosAcceptMessage
+	// maps from peer -> Accept
+	accepts map[string]types.PaxosAcceptMessage
 
 	// list of tlc messages (for that step)
 	tlcMessages    []types.TLCMessage
@@ -54,9 +57,10 @@ func (n *node) getPaxosInstance(step uint) *paxosInstance {
 	_, ok := n.paxosInstances[step]
 	if !ok {
 		n.paxosInstances[step] = &paxosInstance{
-			C:           make(chan types.PaxosValue, 5),
-			promises:    []types.PaxosPromiseMessage{},
-			accepts:     map[string][]types.PaxosAcceptMessage{},
+			Phase2C:     make(chan types.PaxosValue, 5),
+			Phase1C:     make(chan struct{}, 5),
+			promises:    map[string]types.PaxosPromiseMessage{},
+			accepts:     map[string]types.PaxosAcceptMessage{},
 			tlcMessages: make([]types.TLCMessage, 0),
 		}
 	}
@@ -68,31 +72,40 @@ func (n *node) getCurrent() (uint, *paxosInstance) {
 	return n.step, n.getPaxosInstance(n.step)
 }
 
-func (n *node) PreparePaxos(source string) types.PaxosPrepareMessage {
+func (n *node) PreparePaxos(source string, proposeValue types.PaxosValue) types.PaxosPrepareMessage {
 	n.paxosLock.Lock()
 	defer n.paxosLock.Unlock()
 
 	step, paxosInstance := n.getCurrent()
 
-	maxID := paxosInstance.maxID
-	phase := paxosInstance.phase
-
-	for i := 0; maxID != 0 && phase == 0; i++ {
-		backOffTime := time.Millisecond * time.Duration(math.Pow(1.2, float64(i)))
-		n.paxosLock.Unlock()
-
-		time.Sleep(backOffTime)
-
-		n.paxosLock.Lock()
-		step, paxosInstance = n.getCurrent()
-		maxID = paxosInstance.maxID
+	if paxosInstance.proposedValue == nil {
+		paxosInstance.proposedValue = &proposeValue
 	}
 
-	log.Warn().Str("peerAddr", n.myAddr).Msgf("peer %v is proposing a value for step %v", n.myAddr, n.step)
+	maxID := paxosInstance.maxID
+
+	if maxID != 0 {
+		baseTime := rand.Intn(100)
+		backOffTime := time.Millisecond * time.Duration(baseTime)
+		time.Sleep(backOffTime)
+	}
+
+	// for i := 0; maxID != 0 && phase != 0; i++ {
+	// 	n.paxosLock.Unlock()
+
+	// 	time.Sleep(backOffTime)
+	// 	// log.Warn().Str("peerAddr", n.myAddr).Msgf("waiting for my turn", n.myAddr, n.step)
+
+	// 	n.paxosLock.Lock()
+	// 	step, paxosInstance = n.getCurrent()
+	// 	maxID = paxosInstance.maxID
+	// }
 
 	paxosInstance.phase = 1
 
 	id := n.getNextID()
+
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("peer %v is proposing a value for step %v, id %v", n.myAddr, n.step, id)
 
 	prepare := types.PaxosPrepareMessage{
 		Step:   step,
@@ -119,8 +132,6 @@ func (n *node) HandlePrepare(prepare types.PaxosPrepareMessage) (types.PaxosProm
 		return types.PaxosPromiseMessage{}, false
 	}
 
-	paxosInstance.phase = 1
-
 	// update current instance
 	paxosInstance.maxID = prepare.ID
 
@@ -139,7 +150,7 @@ func (n *node) HandlePrepare(prepare types.PaxosPrepareMessage) (types.PaxosProm
 	return promise, true
 }
 
-func (n *node) HandlePromise(promise types.PaxosPromiseMessage) {
+func (n *node) HandlePromise(from string, promise types.PaxosPromiseMessage) {
 	n.paxosLock.Lock()
 	defer n.paxosLock.Unlock()
 
@@ -154,22 +165,32 @@ func (n *node) HandlePromise(promise types.PaxosPromiseMessage) {
 		return
 	}
 
-	if promise.AcceptedValue != nil && promise.AcceptedID > paxosInstance.acceptedID {
+	// if promise.AcceptedValue != nil && promise.AcceptedID > paxosInstance.acceptedID {
+	if promise.AcceptedValue != nil {
+		// log.Warn().Str("peerAddr", n.myAddr).Str("step", fmt.Sprintf("%v", n.step)).Msgf(
+		// 	"received promise with accepted value (%v, %v): overwrite local (%v, %v)",
+		// 	promise.AcceptedID,
+		// 	promise.AcceptedValue.Filename,
+		// 	paxosInstance.acceptedID,
+		// 	paxosInstance.acceptedValue.Filename,
+		// )
 		paxosInstance.acceptedValue = promise.AcceptedValue
-		paxosInstance.maxID = paxosInstance.acceptedID
+		paxosInstance.acceptedID = promise.AcceptedID
 	}
+	paxosInstance.maxID = promise.ID
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("peer %v is promising a value for step %v, max id %v", from, n.step, paxosInstance.maxID)
 
-	paxosInstance.promises = append(paxosInstance.promises, promise)
+	paxosInstance.promises[from] = promise
 
 	// threshold reached?
-	if len(paxosInstance.promises) >= n.threshold {
+	if uint(len(paxosInstance.promises)) >= n.threshold {
 		// notify waiter
 		log.Warn().Str("peerAddr", n.myAddr).Msgf("threshold of promises reached step %v", n.step)
-		paxosInstance.C <- types.PaxosValue{}
+		paxosInstance.Phase1C <- struct{}{}
 	}
 }
 
-func (n *node) ProposePaxos(filename, metahash string) types.PaxosProposeMessage {
+func (n *node) ProposePaxos() types.PaxosProposeMessage {
 	n.paxosLock.Lock()
 	defer n.paxosLock.Unlock()
 
@@ -177,28 +198,45 @@ func (n *node) ProposePaxos(filename, metahash string) types.PaxosProposeMessage
 
 	paxosInstance.phase = 2
 
-	var value types.PaxosValue
+	var value *types.PaxosValue
 
-	if paxosInstance.acceptedValue != nil {
-		value = *paxosInstance.acceptedValue
-	} else {
-		value = types.PaxosValue{
-			Filename: filename,
-			Metahash: metahash,
-			UniqID:   xid.New().String(),
+	highestID := uint(0)
+	for _, promise := range paxosInstance.promises {
+		if highestID > promise.AcceptedID {
+			value = promise.AcceptedValue
+			highestID = promise.AcceptedID
 		}
 	}
+	if value == nil {
+		value = paxosInstance.proposedValue
+	}
+
+	paxosInstance.acceptedID = paxosInstance.maxID
+	paxosInstance.acceptedValue = value
+
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("peer %v is proposing a value for step %v, id %v", n.myAddr, n.step, paxosInstance.maxID)
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("highest id of promises %v, id used %v, max id %v", highestID, paxosInstance.acceptedID, paxosInstance.maxID)
+
+	// if paxosInstance.acceptedValue != nil && paxosInstance.acceptedID >= paxosInstance.maxID {
+	// 	value = *paxosInstance.acceptedValue
+	// } else {
+	// 	value = types.PaxosValue{
+	// 		Filename: filename,
+	// 		Metahash: metahash,
+	// 		UniqID:   xid.New().String(),
+	// 	}
+	// }
 
 	propose := types.PaxosProposeMessage{
 		Step:  step,
 		ID:    paxosInstance.maxID,
-		Value: value,
+		Value: *value,
 	}
 
 	return propose
 }
 
-func (n *node) HandlePropose(propose types.PaxosProposeMessage) (types.PaxosAcceptMessage, bool) {
+func (n *node) HandlePropose(from string, propose types.PaxosProposeMessage) (types.PaxosAcceptMessage, bool) {
 	n.paxosLock.Lock()
 	defer n.paxosLock.Unlock()
 
@@ -213,18 +251,29 @@ func (n *node) HandlePropose(propose types.PaxosProposeMessage) (types.PaxosAcce
 		return types.PaxosAcceptMessage{}, false
 	}
 
-	paxosInstance.phase = 2
-
 	// remember which value we accepted
 	paxosInstance.acceptedValue = &propose.Value
 	paxosInstance.acceptedID = propose.ID
+	log.Warn().Str("peerAddr", n.myAddr).Str("step", fmt.Sprintf("%v", n.step)).Msgf(
+		"from %v received propose with accepted value (%v, %v): overwrite local (%v, %v)",
+		from,
+		propose.ID,
+		propose.Value.Filename,
+		paxosInstance.acceptedID,
+		paxosInstance.acceptedValue.Filename,
+	)
 
-	paxosAcceptMessage := types.PaxosAcceptMessage(propose)
+	paxosAcceptMessage := types.PaxosAcceptMessage{
+		Step:  step,
+		ID:    propose.ID,
+		Value: propose.Value,
+	}
 
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("accepting proposal id %v", paxosInstance.acceptedID)
 	return paxosAcceptMessage, true
 }
 
-func (n *node) HandleAccept(accept types.PaxosAcceptMessage) {
+func (n *node) HandleAccept(from string, accept types.PaxosAcceptMessage) {
 	n.paxosLock.Lock()
 	defer n.paxosLock.Unlock()
 
@@ -235,25 +284,50 @@ func (n *node) HandleAccept(accept types.PaxosAcceptMessage) {
 		return
 	}
 
+	if accept.ID != paxosInstance.maxID {
+		log.Warn().Str("peerAddr", n.myAddr).Msgf("dropping accept id %v my max id %v", accept.ID, paxosInstance.maxID)
+		return
+	}
+
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("accepting id %v my max id %v", accept.ID, paxosInstance.maxID)
+
+	if paxosInstance.acceptedValue != nil && paxosInstance.acceptedValue.UniqID != accept.Value.UniqID {
+		log.Warn().Str("peerAddr", n.myAddr).Msgf("i have accepted a different value", n.step)
+		// todo returnA
+		// return
+	}
+
 	// store
-	uniqID := accept.Value.UniqID
-	paxosInstance.accepts[uniqID] = append(paxosInstance.accepts[uniqID], accept)
+	paxosInstance.accepts[from] = accept
+
+	countByUniqID := map[string]uint{}
+	// group by uniqID
+	for _, accept := range paxosInstance.accepts {
+		value := accept.Value
+		countByUniqID[value.UniqID]++
+	}
 
 	// check if threshold is reached for any proposed value
-	for _, accepts := range paxosInstance.accepts {
-		if len(accepts) >= n.threshold {
+	for uniqID, count := range countByUniqID {
+		if count >= n.threshold {
 			// the waiter can read this value after being notified
-			paxosInstance.acceptedValue = &accepts[0].Value
 
-			// send TLC Message
-			// add block
+			// check for which uniqid the threshold was reached
+			for _, accept := range paxosInstance.accepts {
+				if uniqID == accept.Value.UniqID {
+					paxosInstance.acceptedValue = &accept.Value
+					break
+				} else {
+					log.Info().Str("peerAddr", n.myAddr).Msgf("", step)
+				}
+			}
+
 			value := *paxosInstance.acceptedValue
 
-			log.Info().Str("peerAddr", n.myAddr).Msgf("threshold of accepts reached for step %v", n.step)
-
-			block := n.mintBlock(value)
+			log.Warn().Str("peerAddr", n.myAddr).Msgf("threshold of accepts reached for step %v", n.step)
 
 			if !paxosInstance.tlcMessageSent {
+				block := n.mintBlock(value)
 				go n.sendTLCMessage(step, block)
 
 				paxosInstance.tlcMessageSent = true
@@ -262,7 +336,7 @@ func (n *node) HandleAccept(accept types.PaxosAcceptMessage) {
 	}
 }
 
-func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
+func (n *node) HandleTLC(from string, TLCMessage types.TLCMessage) error {
 	n.paxosLock.Lock()
 	defer n.paxosLock.Unlock()
 
@@ -274,21 +348,26 @@ func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
 	}
 
 	// store
-	log.Info().Str("peerAddr", n.myAddr).Msgf("TLC message from step %v", TLCMessage.Step)
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("TLC message from %v id %v from step %v", from, TLCMessage.Block.Index, TLCMessage.Step)
 
 	msgPaxosInstance := n.getPaxosInstance(TLCMessage.Step)
 	msgPaxosInstance.tlcMessages = append(msgPaxosInstance.tlcMessages, TLCMessage)
 
-	if n.myAddr == "127.0.0.1:3" {
-		log.Info().Str("peerAddr", n.myAddr).Msgf("TLC message from step %v", TLCMessage.Step)
+	// check all steps from current if threshold of TLCMessages is reached (catch up)
+	err := n.checkTLCMessages(currentStep)
+	if err != nil {
+		return err
 	}
 
-	// check all steps from current if threshold of TLCMessages is reached (catch up)
+	return nil
+}
+
+func (n *node) checkTLCMessages(currentStep uint) error {
 	step := currentStep
 	for {
 		paxosInstance := n.getPaxosInstance(step)
 
-		if len(paxosInstance.tlcMessages) < n.threshold {
+		if uint(len(paxosInstance.tlcMessages)) < n.threshold {
 			// only keep catching up as long as all the previous instances have reached their threshold
 			return nil
 		}
@@ -296,8 +375,21 @@ func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
 		log.Info().Str("peerAddr", n.myAddr).Msgf("threshold of TLC messages for step %v", step)
 		block := paxosInstance.tlcMessages[0].Block
 
+		blockHash := block.Hash
+		for _, m := range paxosInstance.tlcMessages {
+			if string(m.Block.Hash) != string(blockHash) {
+				log.Info().Str("peerAddr", n.myAddr).Msgf("threshold of TLC messages for step %v", step)
+
+			}
+		}
+
+		// if block.Value.UniqID != paxosInstance.acceptedValue.UniqID {
+		// 	log.Info().Str("peerAddr", n.myAddr).Msgf("", step)
+		// }
+
 		err := n.addBlock(block)
 		if err != nil {
+			// TODO log
 			return err
 		}
 
@@ -316,7 +408,7 @@ func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
 			}
 
 			log.Info().Str("peerAddr", n.myAddr).Msgf("notify initiating goroutine")
-			paxosInstance.C <- block.Value
+			paxosInstance.Phase2C <- block.Value
 
 		}
 
@@ -324,10 +416,28 @@ func (n *node) HandleTLC(TLCMessage types.TLCMessage) error {
 	}
 }
 
-func (n *node) WaitForNextPhase(timeout time.Duration) (types.PaxosValue, bool) {
+func (n *node) WaitForPromises(timeout time.Duration) bool {
 	n.paxosLock.RLock()
 	_, paxosInstance := n.getCurrent()
-	C := paxosInstance.C
+	C := paxosInstance.Phase1C
+	n.paxosLock.RUnlock()
+
+	for {
+		select {
+		case <-time.After(timeout):
+			log.Info().Str("peerAddr", n.myAddr).Msgf("wait timeout")
+			// retry
+			return false
+		case <-C:
+			return true
+		}
+	}
+}
+
+func (n *node) WaitForAccepts(timeout time.Duration) (types.PaxosValue, bool) {
+	n.paxosLock.RLock()
+	_, paxosInstance := n.getCurrent()
+	C := paxosInstance.Phase2C
 	n.paxosLock.RUnlock()
 
 	for {
@@ -343,12 +453,19 @@ func (n *node) WaitForNextPhase(timeout time.Duration) (types.PaxosValue, bool) 
 }
 
 func (n *node) findPaxosConsensus(filename, metahash string) bool {
+
+	proposeValue := types.PaxosValue{
+		Filename: filename,
+		Metahash: metahash,
+		UniqID:   xid.New().String(),
+	}
+
 	for {
 		// Phase 1
 	Phase1:
 		for {
 			// initialize round, wait for a new step
-			prepare := n.PreparePaxos(n.myAddr)
+			prepare := n.PreparePaxos(n.myAddr, proposeValue)
 			// log.Info().Str("peerAddr", n.myAddr).Msgf("id: %v", prepare.ID)
 			// send prepare
 			err := n.sendPaxosPrepareMessage(prepare)
@@ -358,7 +475,7 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 
 			// wait for promises
 			// HandlePromise will notify this waiter
-			_, nextPhase := n.WaitForNextPhase(n.conf.PaxosProposerRetry)
+			nextPhase := n.WaitForPromises(n.conf.PaxosProposerRetry)
 			if nextPhase {
 				break Phase1
 			}
@@ -367,7 +484,7 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 		}
 
 		// Phase 2
-		propose := n.ProposePaxos(filename, metahash)
+		propose := n.ProposePaxos()
 
 		err := n.sendPaxosProposeMessage(propose)
 		if err != nil {
@@ -376,9 +493,11 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 
 		// wait for accepts
 		// HandleAccept will notify this waiter
-		acceptedValue, consensus := n.WaitForNextPhase(n.conf.PaxosProposerRetry)
-		if consensus && acceptedValue.Filename == filename && acceptedValue.Metahash == metahash {
+		acceptedValue, consensus := n.WaitForAccepts(n.conf.PaxosProposerRetry)
+		if consensus && acceptedValue.UniqID == propose.Value.UniqID {
 			return true
 		}
+		log.Info().Str("peerAddr", n.myAddr).Msgf("%v", n.step)
+
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 )
 
@@ -50,7 +49,6 @@ func (r *routingTable) SetEntry(origin, relayAddr string) {
 
 	// only update if not already neighbor
 	if origin != r.routingTable[origin] {
-		log.Info().Msgf("updating routing table entry %v, old: %v, new: %v", origin, r.routingTable[origin], relayAddr)
 		r.routingTable[origin] = relayAddr
 	}
 }

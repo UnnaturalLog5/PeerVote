@@ -79,7 +79,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	catalog := make(peer.Catalog)
 
 	paxosInstances := make(map[uint]*paxosInstance)
-	threshold := conf.PaxosThreshold(conf.TotalPeers)
+	threshold := uint(conf.PaxosThreshold(conf.TotalPeers))
 
 	peer := node{
 		conf:                conf,
@@ -159,9 +159,11 @@ type node struct {
 	MultiPaxos // interface of multipaxos functionality
 	paxosLock  sync.RWMutex
 	// paxos instances
-	threshold      int
+	threshold      uint
 	paxosInstances map[uint]*paxosInstance
 	step           uint
+
+	blocks map[uint]types.BlockchainBlock
 
 	blockStore storage.Store
 }

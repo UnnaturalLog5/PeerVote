@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/types"
 )
@@ -49,7 +50,7 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 
 	// if it's not the first block, check that the previous hash fits
 	if lastBlockHash != prevHashHex {
-		return errors.New("the same block was already added")
+		return errors.New("the block doesn't match")
 	}
 
 	buf, err := newBlock.Marshal()
@@ -62,7 +63,33 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 
 	// store using hex encoded hash
 	hexHash := hex.EncodeToString(newBlock.Hash)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("in step %v added block with hash %v", n.step, hexHash)
 	n.blockStore.Set(hexHash, buf)
 
+	// TODO remove
+	n.GetAllBlocks()
+
 	return nil
+}
+
+func (n *node) GetAllBlocks() {
+	n.blocks = map[uint]types.BlockchainBlock{}
+
+	lastBlockKey := n.blockStore.Get(storage.LastBlockKey)
+	for i := uint(n.blockStore.Len() - 2); ; i-- {
+		lastBlockHash := hex.EncodeToString(lastBlockKey)
+		// prevHashHex := hex.EncodeToString(newBlock.PrevHash)
+		if lastBlockHash == storage.LastBlockKey {
+			return
+		}
+
+		lastBlockBuf := n.blockStore.Get(lastBlockHash)
+
+		block := types.BlockchainBlock{}
+		block.Unmarshal(lastBlockBuf)
+
+		n.blocks[i] = block
+
+		lastBlockKey = block.PrevHash
+	}
 }
