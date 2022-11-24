@@ -163,7 +163,5 @@ type node struct {
 	paxosInstances map[uint]*paxosInstance
 	step           uint
 
-	blocks map[uint]types.BlockchainBlock
-
 	blockStore storage.Store
 }

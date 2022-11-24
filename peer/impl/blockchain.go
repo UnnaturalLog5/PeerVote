@@ -66,30 +66,5 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("in step %v added block with hash %v", n.step, hexHash)
 	n.blockStore.Set(hexHash, buf)
 
-	// TODO remove
-	n.GetAllBlocks()
-
 	return nil
-}
-
-func (n *node) GetAllBlocks() {
-	n.blocks = map[uint]types.BlockchainBlock{}
-
-	lastBlockKey := n.blockStore.Get(storage.LastBlockKey)
-	for i := uint(n.blockStore.Len() - 2); ; i-- {
-		lastBlockHash := hex.EncodeToString(lastBlockKey)
-		// prevHashHex := hex.EncodeToString(newBlock.PrevHash)
-		if lastBlockHash == storage.LastBlockKey {
-			return
-		}
-
-		lastBlockBuf := n.blockStore.Get(lastBlockHash)
-
-		block := types.BlockchainBlock{}
-		block.Unmarshal(lastBlockBuf)
-
-		n.blocks[i] = block
-
-		lastBlockKey = block.PrevHash
-	}
 }

@@ -165,21 +165,11 @@ func (n *node) HandlePromise(from string, promise types.PaxosPromiseMessage) {
 		return
 	}
 
-	// if promise.AcceptedValue != nil && promise.AcceptedID > paxosInstance.acceptedID {
 	if promise.AcceptedValue != nil {
-		// log.Warn().Str("peerAddr", n.myAddr).Str("step", fmt.Sprintf("%v", n.step)).Msgf(
-		// 	"received promise with accepted value (%v, %v): overwrite local (%v, %v)",
-		// 	promise.AcceptedID,
-		// 	promise.AcceptedValue.Filename,
-		// 	paxosInstance.acceptedID,
-		// 	paxosInstance.acceptedValue.Filename,
-		// )
 		paxosInstance.acceptedValue = promise.AcceptedValue
 		paxosInstance.acceptedID = promise.AcceptedID
 	}
 	paxosInstance.maxID = promise.ID
-	log.Warn().Str("peerAddr", n.myAddr).Msgf("peer %v is promising a value for step %v, max id %v", from, n.step, paxosInstance.maxID)
-
 	paxosInstance.promises[from] = promise
 
 	// threshold reached?
@@ -213,19 +203,6 @@ func (n *node) ProposePaxos() types.PaxosProposeMessage {
 
 	paxosInstance.acceptedID = paxosInstance.maxID
 	paxosInstance.acceptedValue = value
-
-	log.Warn().Str("peerAddr", n.myAddr).Msgf("peer %v is proposing a value for step %v, id %v", n.myAddr, n.step, paxosInstance.maxID)
-	log.Warn().Str("peerAddr", n.myAddr).Msgf("highest id of promises %v, id used %v, max id %v", highestID, paxosInstance.acceptedID, paxosInstance.maxID)
-
-	// if paxosInstance.acceptedValue != nil && paxosInstance.acceptedID >= paxosInstance.maxID {
-	// 	value = *paxosInstance.acceptedValue
-	// } else {
-	// 	value = types.PaxosValue{
-	// 		Filename: filename,
-	// 		Metahash: metahash,
-	// 		UniqID:   xid.New().String(),
-	// 	}
-	// }
 
 	propose := types.PaxosProposeMessage{
 		Step:  step,
@@ -285,16 +262,7 @@ func (n *node) HandleAccept(from string, accept types.PaxosAcceptMessage) {
 	}
 
 	if accept.ID != paxosInstance.maxID {
-		log.Warn().Str("peerAddr", n.myAddr).Msgf("dropping accept id %v my max id %v", accept.ID, paxosInstance.maxID)
 		return
-	}
-
-	log.Warn().Str("peerAddr", n.myAddr).Msgf("accepting id %v my max id %v", accept.ID, paxosInstance.maxID)
-
-	if paxosInstance.acceptedValue != nil && paxosInstance.acceptedValue.UniqID != accept.Value.UniqID {
-		log.Warn().Str("peerAddr", n.myAddr).Msgf("i have accepted a different value", n.step)
-		// todo returnA
-		// return
 	}
 
 	// store
@@ -315,10 +283,9 @@ func (n *node) HandleAccept(from string, accept types.PaxosAcceptMessage) {
 			// check for which uniqid the threshold was reached
 			for _, accept := range paxosInstance.accepts {
 				if uniqID == accept.Value.UniqID {
-					paxosInstance.acceptedValue = &accept.Value
+					value := accept.Value
+					paxosInstance.acceptedValue = &value
 					break
-				} else {
-					log.Info().Str("peerAddr", n.myAddr).Msgf("", step)
 				}
 			}
 
@@ -346,9 +313,6 @@ func (n *node) HandleTLC(from string, TLCMessage types.TLCMessage) error {
 	if TLCMessage.Step < currentStep {
 		return nil
 	}
-
-	// store
-	log.Warn().Str("peerAddr", n.myAddr).Msgf("TLC message from %v id %v from step %v", from, TLCMessage.Block.Index, TLCMessage.Step)
 
 	msgPaxosInstance := n.getPaxosInstance(TLCMessage.Step)
 	msgPaxosInstance.tlcMessages = append(msgPaxosInstance.tlcMessages, TLCMessage)
@@ -383,13 +347,8 @@ func (n *node) checkTLCMessages(currentStep uint) error {
 			}
 		}
 
-		// if block.Value.UniqID != paxosInstance.acceptedValue.UniqID {
-		// 	log.Info().Str("peerAddr", n.myAddr).Msgf("", step)
-		// }
-
 		err := n.addBlock(block)
 		if err != nil {
-			// TODO log
 			return err
 		}
 
