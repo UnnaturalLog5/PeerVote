@@ -79,7 +79,7 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 			return nil
 		}
 
-		log.Info().Str("peerAddr", n.myAddr).Msgf("forwarding rumor to %v", randomNeighborAddr)
+		// log.Info().Str("peerAddr", n.myAddr).Msgf("forwarding rumor to %v", randomNeighborAddr)
 		_, err = n.sendRumors(randomNeighborAddr, rumorsMessage.Rumors)
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msgf("did not send missing rumors to %v", randomNeighborAddr)
@@ -347,7 +347,7 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 			log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send status message")
 		}
 
-		log.Info().Str("peerAddr", n.myAddr).Msgf("sent statusMessage to %v to solicitate rumors", origin)
+		// log.Info().Str("peerAddr", n.myAddr).Msgf("sent statusMessage to %v to solicitate rumors", origin)
 	}
 
 	if len(rumorsToSend) > 0 {
