@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/types"
 )
@@ -63,7 +62,7 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 
 	// store using hex encoded hash
 	hexHash := hex.EncodeToString(newBlock.Hash)
-	log.Info().Str("peerAddr", n.myAddr).Msgf("in step %v added block with hash %v", n.step, hexHash)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("in step %v added block with hash %v", n.step, hexHash)
 	n.blockStore.Set(hexHash, buf)
 
 	return nil

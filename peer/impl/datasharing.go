@@ -74,7 +74,7 @@ func (n *node) retrieveDataFromPeer(key string) ([]byte, error) {
 	randPeerInt := rand.Intn(len(peers))
 	peer := peers[randPeerInt]
 
-	log.Info().Str("peerAddr", n.myAddr).Msgf("need a chunk - requesting from peer %v", peer)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("need a chunk - requesting from peer %v", peer)
 
 	noRetries := n.conf.BackoffDataRequest.Retry
 	backoffFactor := n.conf.BackoffDataRequest.Factor

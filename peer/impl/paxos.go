@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -105,7 +104,7 @@ func (n *node) PreparePaxos(source string, proposeValue types.PaxosValue) types.
 
 	id := n.getNextID()
 
-	log.Warn().Str("peerAddr", n.myAddr).Msgf("peer %v is proposing a value for step %v, id %v", n.myAddr, n.step, id)
+	// logWarn().Str("peerAddr", n.myAddr).Msgf("peer %v is proposing a value for step %v, id %v", n.myAddr, n.step, id)
 
 	prepare := types.PaxosPrepareMessage{
 		Step:   step,
@@ -233,14 +232,14 @@ func (n *node) HandlePropose(from string, propose types.PaxosProposeMessage) (ty
 	// remember which value we accepted
 	paxosInstance.acceptedValue = &propose.Value
 	paxosInstance.acceptedID = propose.ID
-	log.Warn().Str("peerAddr", n.myAddr).Str("step", fmt.Sprintf("%v", n.step)).Msgf(
-		"from %v received propose with accepted value (%v, %v): overwrite local (%v, %v)",
-		from,
-		propose.ID,
-		propose.Value.Filename,
-		paxosInstance.acceptedID,
-		paxosInstance.acceptedValue.Filename,
-	)
+	// logWarn().Str("peerAddr", n.myAddr).Str("step", fmt.Sprintf("%v", n.step)).Msgf(
+	// 	"from %v received propose with accepted value (%v, %v): overwrite local (%v, %v)",
+	// 	from,
+	// 	propose.ID,
+	// 	propose.Value.Filename,
+	// 	paxosInstance.acceptedID,
+	// 	paxosInstance.acceptedValue.Filename,
+	// )
 
 	paxosAcceptMessage := types.PaxosAcceptMessage{
 		Step:  step,
@@ -248,7 +247,7 @@ func (n *node) HandlePropose(from string, propose types.PaxosProposeMessage) (ty
 		Value: propose.Value,
 	}
 
-	log.Warn().Str("peerAddr", n.myAddr).Msgf("accepting proposal id %v", paxosInstance.acceptedID)
+	// logWarn().Str("peerAddr", n.myAddr).Msgf("accepting proposal id %v", paxosInstance.acceptedID)
 	return paxosAcceptMessage, true
 }
 

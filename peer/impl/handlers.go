@@ -14,7 +14,7 @@ import (
 
 // is type of registry.Exec
 func (n *node) HandleChatMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("received message: '%v'", string(pkt.Msg.Payload))
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("received message: '%v'", string(pkt.Msg.Payload))
 	return nil
 }
 
@@ -113,12 +113,12 @@ func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
 }
 
 func (n *node) HandleEmptyMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling heartbeat message from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling heartbeat message from %v", pkt.Header.Source)
 	return nil
 }
 
 func (n *node) HandleDataReplyMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling data reply message message from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling data reply message message from %v", pkt.Header.Source)
 
 	dataReplyMessage := types.DataReplyMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &dataReplyMessage)
@@ -138,7 +138,7 @@ func (n *node) HandleDataReplyMessage(t types.Message, pkt transport.Packet) err
 }
 
 func (n *node) HandleDataRequestMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling data request message from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling data request message from %v", pkt.Header.Source)
 
 	dataRequestMessage := types.DataRequestMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &dataRequestMessage)
@@ -162,7 +162,7 @@ func (n *node) HandleDataRequestMessage(t types.Message, pkt transport.Packet) e
 }
 
 func (n *node) HandleSearchReplyMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling search reply message from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling search reply message from %v", pkt.Header.Source)
 	seachReplyMessage := types.SearchReplyMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &seachReplyMessage)
 	if err != nil {
@@ -203,7 +203,7 @@ func (n *node) HandleSearchReplyMessage(t types.Message, pkt transport.Packet) e
 }
 
 func (n *node) HandleSearchRequestMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling search request message from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling search request message from %v", pkt.Header.Source)
 	seachRequestMessage := types.SearchRequestMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &seachRequestMessage)
 	if err != nil {
@@ -274,7 +274,7 @@ func (n *node) HandlePrivateMessage(t types.Message, pkt transport.Packet) error
 		Msg:    privateMessage.Msg,
 	}
 
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling privateMessage from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling privateMessage from %v", pkt.Header.Source)
 	err = n.conf.MessageRegistry.ProcessPacket(localPkt)
 	if err != nil {
 		return err
@@ -374,7 +374,7 @@ func (n *node) processStatusMessage(origin string, remoteStatus types.StatusMess
 }
 
 func (n *node) HandlePaxosPrepareMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Paxos Prepare from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling Paxos Prepare from %v", pkt.Header.Source)
 
 	paxosPrepareMessage := types.PaxosPrepareMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &paxosPrepareMessage)
@@ -398,7 +398,7 @@ func (n *node) HandlePaxosPrepareMessage(t types.Message, pkt transport.Packet) 
 }
 
 func (n *node) HandlePaxosPromiseMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Paxos Promise from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling Paxos Promise from %v", pkt.Header.Source)
 
 	paxosPromiseMessage := types.PaxosPromiseMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &paxosPromiseMessage)
@@ -412,7 +412,7 @@ func (n *node) HandlePaxosPromiseMessage(t types.Message, pkt transport.Packet) 
 }
 
 func (n *node) HandlePaxosProposeMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Paxos Propose from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling Paxos Propose from %v", pkt.Header.Source)
 
 	paxosProposeMessage := types.PaxosProposeMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &paxosProposeMessage)
@@ -435,7 +435,7 @@ func (n *node) HandlePaxosProposeMessage(t types.Message, pkt transport.Packet) 
 }
 
 func (n *node) HandlePaxosAcceptMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Paxos Accept from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling Paxos Accept from %v", pkt.Header.Source)
 
 	paxosAcceptMessage := types.PaxosAcceptMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &paxosAcceptMessage)
@@ -449,7 +449,7 @@ func (n *node) HandlePaxosAcceptMessage(t types.Message, pkt transport.Packet) e
 }
 
 func (n *node) HandleTLCMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling TLC from %v", pkt.Header.Source)
+	// logInfo().Str("peerAddr", n.myAddr).Msgf("handling TLC from %v", pkt.Header.Source)
 
 	TLCMessage := types.TLCMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &TLCMessage)
