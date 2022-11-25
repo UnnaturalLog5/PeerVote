@@ -19,8 +19,8 @@ import (
 
 var (
 	// defaultLevel can be changed to set the desired level of the logger
-	defaultLevel = zerolog.InfoLevel
-	// defaultLevel = zerolog.ErrorLevel
+	// defaultLevel = zerolog.InfoLevel
+	defaultLevel = zerolog.ErrorLevel
 
 	// log.ut is the logger configuration
 	logout = zerolog.ConsoleWriter{

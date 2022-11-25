@@ -35,7 +35,7 @@ func (n *node) receiveLoop() {
 func (n *node) sendStatusMessageLoop() {
 	err := n.sendStatusMessageToRandomNeighbor()
 	if err != nil {
-		log.Err(err).Str("peerAddr", n.myAddr).Msg("did not send status message")
+		log.Info().Str("peerAddr", n.myAddr).Msg("did not send status message, no neighbors")
 	}
 
 	for {

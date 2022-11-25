@@ -322,11 +322,12 @@ func (n *node) HandleTLC(from string, TLCMessage types.TLCMessage) error {
 		block := paxosInstance.tlcMessages[0].Block
 		// block := TLCMessage.Block
 
+		// if block.Value.UniqID !=
+
 		blockHash := block.Hash
 		for _, m := range paxosInstance.tlcMessages {
 			if string(m.Block.Hash) != string(blockHash) {
 				log.Info().Str("peerAddr", n.myAddr).Msgf("threshold of TLC messages for step %v", step)
-
 			}
 		}
 

@@ -75,41 +75,29 @@ func (n *node) Broadcast(msg transport.Message) error {
 		0,
 	)
 
+	rumors := []types.Rumor{rumor}
+
+	randomNeighborAddr, ok := n.routingTable.GetRandomNeighbor(n.myAddr)
+	if ok {
+		pkt, err := n.sendRumors(randomNeighborAddr, rumors)
+		if err != nil {
+			log.Err(err).Str("peerAddr", n.myAddr).Msg("could not send broadcast")
+			// return err
+		}
+		if n.conf.AckTimeout > 0 {
+			// wait for acknowledgement
+			go n.waitForAckOrResend(pkt)
+		}
+	}
+
 	localPkt := transport.Packet{
 		Header: &header,
 		Msg:    &msg,
 	}
 
-	go func() {
-		err := n.conf.MessageRegistry.ProcessPacket(localPkt)
-		if err != nil {
-			log.Err(err).Str("peerAddr", n.myAddr)
-		}
-	}()
-
-	rumors := []types.Rumor{rumor}
-
-	randomNeighborAddr, ok := n.routingTable.GetRandomNeighbor(n.myAddr)
-	if !ok {
-		log.Err(err).Str("peerAddr", n.myAddr).Msg("could not send broadcast")
-		// return err
-		return nil
-	}
-
-	pkt, err := n.sendRumors(randomNeighborAddr, rumors)
+	n.conf.MessageRegistry.ProcessPacket(localPkt)
 	if err != nil {
-		log.Err(err).Str("peerAddr", n.myAddr).Msg("could not send broadcast")
-		// return err
-	}
-
-	// n.conf.MessageRegistry.ProcessPacket(localPkt)
-	// if err != nil {
-	// 	return err
-	// }
-
-	if n.conf.AckTimeout > 0 {
-		// wait for acknowledgement
-		go n.waitForAckOrResend(pkt)
+		return err
 	}
 
 	return nil
