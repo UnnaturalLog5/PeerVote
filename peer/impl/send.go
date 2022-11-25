@@ -149,7 +149,7 @@ func (n *node) route(dest string, pkt transport.Packet) error {
 }
 
 func (n *node) sendAck(pkt transport.Packet) error {
-	// log.Info().Str("peerAddr", n.myAddr).Msgf("acknowledging receipt of pkt from %v", pkt.Header.Source)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("acknowledging receipt of pkt from %v", pkt.Header.Source)
 
 	dest := pkt.Header.Source
 
@@ -273,7 +273,7 @@ func (n *node) sendRumors(dest string, rumors []types.Rumor) (transport.Packet, 
 }
 
 func (n *node) sendHeartbeat() error {
-	// logInfo().Str("peerAddr", n.myAddr).Msgf("broadcasting heartbeat message")
+	log.Info().Str("peerAddr", n.myAddr).Msgf("broadcasting heartbeat message")
 	emptyMessage := types.EmptyMessage{}.NewEmpty()
 
 	msg, err := marshalMessage(emptyMessage)
@@ -289,7 +289,7 @@ func (n *node) sendHeartbeat() error {
 }
 
 func (n *node) sendDataRequest(peer, key string) (string, error) {
-	// logInfo().Str("peerAddr", n.myAddr).Msgf("sending data request message to %v", peer)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending data request message to %v", peer)
 
 	requestID := xid.New().String()
 
@@ -312,7 +312,7 @@ func (n *node) sendDataRequest(peer, key string) (string, error) {
 }
 
 func (n *node) sendDataReply(peer, requestID, key string, data []byte) error {
-	// logInfo().Str("peerAddr", n.myAddr).Msgf("sending data reply message to %v", peer)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending data reply message to %v", peer)
 
 	dataReplyMessage := types.DataReplyMessage{
 		RequestID: requestID,
@@ -356,7 +356,7 @@ func (n *node) forwardSearchRequest(origin, peer string, budget uint, reg regexp
 }
 
 func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Regexp) (string, error) {
-	// logInfo().Str("peerAddr", n.myAddr).Msgf("sending search request message to %v", peer)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending search request message to %v", peer)
 	requestID := xid.New().String()
 	origin := n.myAddr
 	err := n.forwardSearchRequest(origin, peer, budget, reg, requestID)
@@ -368,7 +368,7 @@ func (n *node) sendSearchRequestMessage(peer string, budget uint, reg regexp.Reg
 }
 
 func (n *node) sendSearchReplyMessage(searchOrigin, dest string, searchReplyMessage types.SearchReplyMessage) error {
-	// logInfo().Str("peerAddr", n.myAddr).Msgf("sending search reply message to %v via %v", searchOrigin, dest)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending search reply message to %v via %v", searchOrigin, dest)
 	msg, err := marshalMessage(searchReplyMessage)
 	if err != nil {
 		return err
@@ -405,7 +405,7 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 		return
 	}
 
-	// logWarn().Str("peerAddr", n.myAddr).Msgf("did not receive ack from %v - resending", pkt.Header.Destination)
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("did not receive ack from %v - resending", pkt.Header.Destination)
 	// send message to another neighbor
 	// get another neighbor
 	randomNeighborAddr, ok := n.routingTable.GetRandomNeighbor(n.myAddr, pkt.Header.Destination)
@@ -413,7 +413,7 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 		return
 	}
 
-	// log.Warn().Str("peerAddr", n.myAddr).Msgf("did not receive ack from %v", pkt.Header.Destination)
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("did not receive ack from %v", pkt.Header.Destination)
 
 	newPkt := pkt.Copy()
 
@@ -433,7 +433,7 @@ func (n *node) waitForAckOrResend(pkt transport.Packet) {
 }
 
 func (n *node) sendPaxosPrepareMessage(paxosPrepareMessage types.PaxosPrepareMessage) error {
-	// logInfo().Str("peerAddr", n.myAddr).Msgf("sending Paxos Prepare")
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Prepare")
 
 	msg, err := marshalMessage(paxosPrepareMessage)
 	if err != nil {
@@ -449,7 +449,7 @@ func (n *node) sendPaxosPrepareMessage(paxosPrepareMessage types.PaxosPrepareMes
 }
 
 func (n *node) sendPaxosPromiseMessage(dest string, paxosPromiseMessage types.PaxosPromiseMessage) error {
-	// logInfo().Str("peerAddr", n.myAddr).Msgf("sending Paxos Promise to %v", dest)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Promise to %v", dest)
 
 	// send private message
 	paxosPromiseTransportMessage, err := marshalMessage(paxosPromiseMessage)
@@ -493,7 +493,7 @@ func (n *node) sendPaxosProposeMessage(paxosProposeMessage types.PaxosProposeMes
 }
 
 func (n *node) sendPaxosAcceptMessage(paxosAcceptMessage types.PaxosAcceptMessage) error {
-	// log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Accept")
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending Paxos Accept")
 
 	msg, err := marshalMessage(paxosAcceptMessage)
 	if err != nil {
@@ -509,7 +509,7 @@ func (n *node) sendPaxosAcceptMessage(paxosAcceptMessage types.PaxosAcceptMessag
 }
 
 func (n *node) sendTLCMessage(step uint, block types.BlockchainBlock) {
-	// logInfo().Str("peerAddr", n.myAddr).Msgf("sending TLC Message for step %v", step)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending TLC Message for step %v", step)
 
 	TLCMessage := types.TLCMessage{
 		Step:  step,

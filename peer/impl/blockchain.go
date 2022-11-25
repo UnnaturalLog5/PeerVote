@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/types"
 )
@@ -47,6 +48,10 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 	lastBlockHash := hex.EncodeToString(lastBlockKey)
 	prevHashHex := hex.EncodeToString(newBlock.PrevHash)
 
+	if n.blockStore.Len()-1 != int(newBlock.Index) {
+		return nil
+	}
+
 	// if it's not the first block, check that the previous hash fits
 	if lastBlockHash != prevHashHex {
 		return errors.New("the block doesn't match")
@@ -62,7 +67,7 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 
 	// store using hex encoded hash
 	hexHash := hex.EncodeToString(newBlock.Hash)
-	// logInfo().Str("peerAddr", n.myAddr).Msgf("in step %v added block with hash %v", n.step, hexHash)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("in step %v added block with hash %v", n.step, hexHash)
 	n.blockStore.Set(hexHash, buf)
 
 	return nil

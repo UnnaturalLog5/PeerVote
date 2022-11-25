@@ -89,22 +89,11 @@ func (n *node) PreparePaxos(source string, proposeValue types.PaxosValue) types.
 		time.Sleep(backOffTime)
 	}
 
-	// for i := 0; maxID != 0 && phase != 0; i++ {
-	// 	n.paxosLock.Unlock()
-
-	// 	time.Sleep(backOffTime)
-	// 	// log.Warn().Str("peerAddr", n.myAddr).Msgf("waiting for my turn", n.myAddr, n.step)
-
-	// 	n.paxosLock.Lock()
-	// 	step, paxosInstance = n.getCurrent()
-	// 	maxID = paxosInstance.maxID
-	// }
-
 	paxosInstance.phase = 1
 
 	id := n.getNextID()
 
-	// logWarn().Str("peerAddr", n.myAddr).Msgf("peer %v is proposing a value for step %v, id %v", n.myAddr, n.step, id)
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("peer %v is proposing a value for step %v, id %v", n.myAddr, n.step, id)
 
 	prepare := types.PaxosPrepareMessage{
 		Step:   step,
@@ -247,7 +236,7 @@ func (n *node) HandlePropose(from string, propose types.PaxosProposeMessage) (ty
 		Value: propose.Value,
 	}
 
-	// logWarn().Str("peerAddr", n.myAddr).Msgf("accepting proposal id %v", paxosInstance.acceptedID)
+	log.Warn().Str("peerAddr", n.myAddr).Msgf("accepting proposal id %v", paxosInstance.acceptedID)
 	return paxosAcceptMessage, true
 }
 
@@ -320,15 +309,6 @@ func (n *node) HandleTLC(from string, TLCMessage types.TLCMessage) error {
 	msgPaxosInstance.tlcMessages = append(msgPaxosInstance.tlcMessages, TLCMessage)
 
 	// check all steps from current if threshold of TLCMessages is reached (catch up)
-	err := n.checkTLCMessages(currentStep)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (n *node) checkTLCMessages(currentStep uint) error {
 	step := currentStep
 	for {
 		paxosInstance := n.getPaxosInstance(step)
@@ -340,6 +320,7 @@ func (n *node) checkTLCMessages(currentStep uint) error {
 
 		log.Info().Str("peerAddr", n.myAddr).Msgf("threshold of TLC messages for step %v", step)
 		block := paxosInstance.tlcMessages[0].Block
+		// block := TLCMessage.Block
 
 		blockHash := block.Hash
 		for _, m := range paxosInstance.tlcMessages {
@@ -427,7 +408,6 @@ func (n *node) findPaxosConsensus(filename, metahash string) bool {
 		for {
 			// initialize round, wait for a new step
 			prepare := n.PreparePaxos(n.myAddr, proposeValue)
-			// log.Info().Str("peerAddr", n.myAddr).Msgf("id: %v", prepare.ID)
 			// send prepare
 			err := n.sendPaxosPrepareMessage(prepare)
 			if err != nil {

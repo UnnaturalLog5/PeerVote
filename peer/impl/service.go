@@ -10,7 +10,7 @@ import (
 )
 
 func (n *node) receiveLoop() {
-	// logInfo().Str("peerAddr", n.myAddr).Msg("peer started listening")
+	log.Info().Str("peerAddr", n.myAddr).Msg("peer started listening")
 
 	for {
 		select {
@@ -128,7 +128,7 @@ func (n *node) Stop() error {
 	n.stopPeer <- struct{}{}
 	close(n.stopPeer)
 
-	// logInfo().Str("peerAddr", n.myAddr).Msg("peer shut down")
+	log.Info().Str("peerAddr", n.myAddr).Msg("peer shut down")
 	return nil
 }
 

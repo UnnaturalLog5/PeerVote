@@ -20,8 +20,9 @@ import (
 var (
 	// defaultLevel can be changed to set the desired level of the logger
 	defaultLevel = zerolog.InfoLevel
+	// defaultLevel = zerolog.ErrorLevel
 
-	// logout is the logger configuration
+	// log.ut is the logger configuration
 	logout = zerolog.ConsoleWriter{
 		Out:        os.Stdout,
 		TimeFormat: time.RFC3339,
@@ -52,8 +53,6 @@ func init() {
 // NewPeer creates a new peer. You can change the content and location of this
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
-	log.Info()
-
 	// seed once when we start the peer for all following pseudo-random operations
 	rand.Seed(time.Now().UnixNano())
 
