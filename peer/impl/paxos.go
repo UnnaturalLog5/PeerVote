@@ -56,8 +56,8 @@ func (n *node) getPaxosInstance(step uint) *paxosInstance {
 	_, ok := n.paxosInstances[step]
 	if !ok {
 		n.paxosInstances[step] = &paxosInstance{
-			Phase2C:     make(chan types.PaxosValue, 2),
-			Phase1C:     make(chan struct{}, 2),
+			Phase2C:     make(chan types.PaxosValue, 100),
+			Phase1C:     make(chan struct{}, 100),
 			promises:    map[uint][]types.PaxosPromiseMessage{},
 			accepts:     map[uint][]types.PaxosAcceptMessage{},
 			tlcMessages: make([]types.TLCMessage, 0),
