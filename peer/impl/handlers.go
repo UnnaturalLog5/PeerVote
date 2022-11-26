@@ -449,8 +449,6 @@ func (n *node) HandlePaxosAcceptMessage(t types.Message, pkt transport.Packet) e
 }
 
 func (n *node) HandleTLCMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling TLC from %v", pkt.Header.Source)
-
 	TLCMessage := types.TLCMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &TLCMessage)
 	if err != nil {

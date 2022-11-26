@@ -62,7 +62,6 @@ func (n *node) getPeersForData(key string) ([]string, bool) {
 }
 
 func (n *node) Tag(name string, mh string) error {
-
 	mhBytesExisting := n.namingStore.Get(name)
 	if mhBytesExisting != nil {
 		return errors.New("metahash already exists")

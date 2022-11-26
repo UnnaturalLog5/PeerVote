@@ -95,7 +95,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 		Msg:    &msg,
 	}
 
-	n.conf.MessageRegistry.ProcessPacket(localPkt)
+	err = n.conf.MessageRegistry.ProcessPacket(localPkt)
 	if err != nil {
 		return err
 	}

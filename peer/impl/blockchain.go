@@ -4,6 +4,8 @@ import (
 	"crypto"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/rs/zerolog/log"
@@ -38,6 +40,33 @@ func (n *node) mintBlock(value types.PaxosValue) types.BlockchainBlock {
 	return newBlock
 }
 
+func (n *node) isInBlockchain(uniqID string) bool {
+	n.paxosLock.Lock()
+	defer n.paxosLock.Unlock()
+
+	lastBlockKey := n.blockStore.Get(storage.LastBlockKey)
+	for {
+		lastBlockHash := hex.EncodeToString(lastBlockKey)
+		if lastBlockHash == storage.LastBlockKey {
+			return false
+		}
+
+		lastBlockBuf := n.blockStore.Get(lastBlockHash)
+
+		block := types.BlockchainBlock{}
+		err := block.Unmarshal(lastBlockBuf)
+		if err != nil {
+			return false
+		}
+
+		if block.Value.UniqID == uniqID {
+			return true
+		}
+
+		lastBlockKey = block.PrevHash
+	}
+}
+
 func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 	prevHash := n.blockStore.Get(storage.LastBlockKey)
 	if prevHash == nil {
@@ -67,7 +96,21 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 
 	// store using hex encoded hash
 	hexHash := hex.EncodeToString(newBlock.Hash)
-	log.Info().Str("peerAddr", n.myAddr).Msgf("in step %v added block with hash %v", n.step, hexHash)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("in step %v added block with uniqid %v", n.step, newBlock.Value.UniqID)
+
+	s := fmt.Sprintf("%v, %v, %v\n", n.myAddr, newBlock.Index, newBlock.Value.UniqID)
+
+	f, err := os.OpenFile("blockchain.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	defer f.Close()
+
+	if _, err = f.WriteString(s); err != nil {
+		panic(err)
+	}
+
 	n.blockStore.Set(hexHash, buf)
 
 	return nil
