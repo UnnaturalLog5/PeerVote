@@ -4,8 +4,6 @@ import (
 	"crypto"
 	"encoding/hex"
 	"errors"
-	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/rs/zerolog/log"
@@ -98,18 +96,18 @@ func (n *node) addBlock(newBlock types.BlockchainBlock) error {
 	hexHash := hex.EncodeToString(newBlock.Hash)
 	log.Info().Str("peerAddr", n.myAddr).Msgf("in step %v added block with uniqid %v", n.step, newBlock.Value.UniqID)
 
-	s := fmt.Sprintf("%v, %v, %v\n", n.myAddr, newBlock.Index, newBlock.Value.UniqID)
+	// s := fmt.Sprintf("%v, %v, %v\n", n.myAddr, newBlock.Index, newBlock.Value.UniqID)
 
-	f, err := os.OpenFile("blockchain.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		panic(err)
-	}
+	// f, err := os.OpenFile("blockchain.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	defer f.Close()
+	// defer f.Close()
 
-	if _, err = f.WriteString(s); err != nil {
-		panic(err)
-	}
+	// if _, err = f.WriteString(s); err != nil {
+	// 	panic(err)
+	// }
 
 	n.blockStore.Set(hexHash, buf)
 
