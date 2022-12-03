@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/peer/impl/asyncnotify"
+	"go.dedis.ch/cs438/peer/impl/electionstore"
 	"go.dedis.ch/cs438/peer/impl/routingtable"
 	"go.dedis.ch/cs438/peer/impl/rumorstore"
 	"go.dedis.ch/cs438/storage"
@@ -74,6 +75,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	dataBlobStore := conf.Storage.GetDataBlobStore()
 	namingStore := conf.Storage.GetNamingStore()
 	blockStore := conf.Storage.GetBlockchainStore()
+	electionStore := electionstore.New()
 
 	catalog := make(peer.Catalog)
 
@@ -97,6 +99,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		blockStore:          blockStore,
 		paxosInstances:      paxosInstances,
 		threshold:           threshold,
+		electionStore:       electionStore,
 	}
 
 	// register Callbacks
@@ -115,6 +118,10 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.PaxosProposeMessage{}, peer.HandlePaxosProposeMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.PaxosAcceptMessage{}, peer.HandlePaxosAcceptMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.TLCMessage{}, peer.HandleTLCMessage)
+
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.StartElectionMessage{}, peer.HandleStartElectionMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.VoteMessage{}, peer.HandleVoteMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.ResultMessage{}, peer.HandleResultMessage)
 
 	return &peer
 }
@@ -163,4 +170,6 @@ type node struct {
 	step           uint
 
 	blockStore storage.Store
+
+	electionStore electionstore.ElectionStore
 }
