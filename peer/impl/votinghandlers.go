@@ -5,11 +5,14 @@ import (
 	"errors"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 )
 
 func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling StartElection from %v", pkt.Header.Source)
+
 	startElectionMessage := types.StartElectionMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &startElectionMessage)
 	if err != nil {
@@ -51,6 +54,7 @@ func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet)
 }
 
 func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Vote from %v", pkt.Header.Source)
 	voteMessage := types.VoteMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &voteMessage)
 	if err != nil {

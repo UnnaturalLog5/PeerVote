@@ -4,51 +4,45 @@ import (
 	"errors"
 	"time"
 
+	"github.com/rs/xid"
 	"go.dedis.ch/cs438/types"
 )
 
-func (n *node) StartElection() error {
-	// TODO
-	// pass these as parameters
-
+func (n *node) StartElection(choices []string, expirationTime time.Time) (string, error) {
 	// generate election id
-	choices := []types.Choice{
-		{
-			// ChoiceID: xid.New().String(),
-			ChoiceID: "a",
-			Name:     "A Good Choice",
-		},
-		{
-			// ChoiceID: xid.New().String(),
-			ChoiceID: "b",
-			Name:     "A Better Choice",
-		},
+	electionChoices := []types.Choice{}
+	for _, choice := range choices {
+		electionChoices = append(electionChoices, types.Choice{
+			ChoiceID: xid.New().String(),
+			Name:     choice,
+		})
 	}
-	expirationTime := time.Now().Add(time.Second * 30)
 
-	random_neighbor, ok := n.routingTable.GetRandomNeighbor(n.myAddr)
+	// TODO
+	// for now just set random neighbors as mixnet servers
+	random_neighbor, ok := n.routingTable.GetRandomNeighbor()
 	if !ok {
-		return errors.New("no neighbor")
+		return "", errors.New("no neighbor")
 	}
 	mixnetServers := []string{
 		random_neighbor,
 	}
 
+	electionID := xid.New().String()
 	startElectionMessage := types.StartElectionMessage{
-		// ElectionID:    xid.New().String(),
-		ElectionID:    "1",
+		ElectionID:    electionID,
 		Initiator:     n.myAddr,
-		Choices:       choices,
+		Choices:       electionChoices,
 		Expiration:    expirationTime,
 		MixnetServers: mixnetServers,
 	}
 
 	err := n.sendStartElectionMessage(startElectionMessage)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return electionID, nil
 }
 
 func (n *node) GetElections() []types.Election {
@@ -57,11 +51,11 @@ func (n *node) GetElections() []types.Election {
 	return elections
 }
 
-func (n *node) Vote(electionID string, choice string) error {
+func (n *node) Vote(electionID string, choiceID string) error {
 	// broadcast as private message
 	voteMessage := types.VoteMessage{
 		ElectionID: electionID,
-		Vote:       choice,
+		Vote:       choiceID,
 	}
 
 	election := n.electionStore.Get(electionID)

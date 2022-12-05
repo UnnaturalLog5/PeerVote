@@ -20,8 +20,8 @@ import (
 
 var (
 	// defaultLevel can be changed to set the desired level of the logger
-	// defaultLevel = zerolog.InfoLevel
-	defaultLevel = zerolog.ErrorLevel
+	defaultLevel = zerolog.InfoLevel
+	// defaultLevel = zerolog.ErrorLevel
 
 	// log.ut is the logger configuration
 	logout = zerolog.ConsoleWriter{
@@ -162,8 +162,7 @@ type node struct {
 	knownRequests sync.Map
 
 	// paxos
-	MultiPaxos // interface of multipaxos functionality
-	paxosLock  sync.RWMutex
+	paxosLock sync.RWMutex
 	// paxos instances
 	threshold      uint
 	paxosInstances map[uint]*paxosInstance

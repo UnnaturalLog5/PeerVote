@@ -9,7 +9,7 @@ func (m StartElectionMessage) NewEmpty() Message {
 
 // Name implements types.Message.
 func (m StartElectionMessage) Name() string {
-	return "chat"
+	return "startelection"
 }
 
 // String implements types.Message.
@@ -31,7 +31,7 @@ func (m VoteMessage) NewEmpty() Message {
 
 // Name implements types.Message.
 func (m VoteMessage) Name() string {
-	return "chat"
+	return "vote"
 }
 
 // String implements types.Message.
@@ -53,7 +53,7 @@ func (m ResultMessage) NewEmpty() Message {
 
 // Name implements types.Message.
 func (m ResultMessage) Name() string {
-	return "chat"
+	return "result"
 }
 
 // String implements types.Message.
