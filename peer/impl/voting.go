@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/types"
 )
 
@@ -95,9 +96,11 @@ func (n *node) Vote(electionID string, choiceID string) error {
 // 	return nil
 // }
 
-func (n *node) Tally(electionID string, votes []string) error {
+func (n *node) Tally(electionID string) {
+	election := n.electionStore.Get(electionID)
+
 	results := map[string]int{}
-	for _, vote := range votes {
+	for _, vote := range election.Votes {
 		results[vote]++
 	}
 
@@ -116,8 +119,6 @@ func (n *node) Tally(electionID string, votes []string) error {
 
 	err := n.sendResultsMessage(resultMessage)
 	if err != nil {
-		return err
+		log.Err(err).Str("peerAddr", n.myAddr).Msgf("error broadcasting election results")
 	}
-
-	return nil
 }

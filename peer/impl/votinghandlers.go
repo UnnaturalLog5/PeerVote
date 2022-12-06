@@ -11,7 +11,7 @@ import (
 )
 
 func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling StartElection from %v", pkt.Header.Source)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling StartElectionMessage from %v", pkt.Header.Source)
 
 	startElectionMessage := types.StartElectionMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &startElectionMessage)
@@ -47,14 +47,14 @@ func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet)
 			// n.MixAndForward()
 
 			// for now just start tallying
-
+			n.Tally(election.ElectionID)
 		}()
 	}
 	return nil
 }
 
 func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling Vote from %v", pkt.Header.Source)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling VoteMessage from %v", pkt.Header.Source)
 	voteMessage := types.VoteMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &voteMessage)
 	if err != nil {
@@ -80,6 +80,7 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 }
 
 func (n *node) HandleResultMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling ResultsMessage from %v", pkt.Header.Source)
 	resultMessage := types.ResultMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &resultMessage)
 	if err != nil {

@@ -21,7 +21,7 @@ func Test_SimpleElection(t *testing.T) {
 	node1.AddPeer(node2.GetAddr())
 
 	choices := []string{"One choice", "a better choice"}
-	expirationTime := time.Now().Add(time.Second * 30)
+	expirationTime := time.Now().Add(time.Second * 5)
 
 	electionID, err := node1.StartElection(choices, expirationTime)
 	require.NoError(t, err)
@@ -58,6 +58,18 @@ func Test_SimpleElection(t *testing.T) {
 
 	votes := node.GetElections()[0].Votes
 	require.Len(t, votes, 2)
+
+	time.Sleep(time.Second * 6)
+
+	elections = node1.GetElections()
+	election = elections[0]
+
+	require.Equal(t, election.Winner, choiceID)
+
+	elections2 = node2.GetElections()
+	election2 = elections2[0]
+
+	require.Equal(t, election2.Winner, choiceID)
 }
 
 func Test_ElectionExpired(t *testing.T) {
