@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CS438 - Peerster</title>
+    <meta charset="UTF-8">
+    <script type="module">
+        import { Application, Controller } from "https://unpkg.com/@hotwired/stimulus/dist/stimulus.js"
+        window.Stimulus = Application.start()
+
+        Stimulus.register("startelection", class extends Controller {
+        static targets = [
+                            "title",
+                            "description",
+                            "expirationtime",
+                            "mixnetservers"
+                         ]
+
+        publish() {
+            const options = {
+                "title": this.titleTarget.value,
+                "description": this.descriptionTarget.value,
+                "expirationtime": this.expirationtimeTarget.value,
+                "mixnetservers": this.mixnetserversTarget.value,
+            }
+        }
+        })
+  </script>
+</head>
+<body>
+    <div>
+        <h1>PeerVote</h1>
+        <div class="row"><span>Logged in as {{ .NodeAddr }}</span></div>
+
+        <div data-controller="startelection" class="section">
+        <h2>New Election</h2>
+        <div class="subsection">
+        <div class="subsectioncontent">
+            <div class="row"><span>Title</span></div>
+            <div class="row">
+                <input data-startelection-target="title" name="title" type="text" placeholder="title"/> 
+            </div>
+
+            <div class="row"><span>Description</span></div>
+            <div class="row">
+                <textarea data-startelection-target="description" name="message" placeholder="describe the election..."></textarea>
+            </div>
+
+            <div class="row"><span>Time open (seconds)</span></div>
+            <div class="row">
+                <input data-startelection-target="expirationtime" name="time" type="number" placeholder="time (seconds)"/> 
+            </div>
+
+            <div class="row"><span>MixnetServers</span></div>
+            <div class="row">
+                {{/* <select data-startelection-target="mixnetservers" name="mixnetservers" multiple="yes">
+                {{ range $server := .MixnetServers }}
+                    <option value="{{$server}}">{{$server}}</option>
+                {{ end }}
+                </select> */}}
+            </div>
+
+            <div class="row">
+                <button data-action="click->startelection#publish">
+                    {{/* <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 0l-6 22-8.129-7.239 7.802-8.234-10.458 7.227-7.215-1.754 24-12zm-15 16.668v7.332l3.258-4.431-3.258-2.901z"/></svg> */}}
+                    Submit
+                </button>
+            </div>
+        </div>
+        </div>
+        </div>
+
+        {{/* {{ range $election := .Elections }}
+
+        {{ end }} */}}
+
+        <div class="section">
+        <h2>Elections</h2>
+            {{ if (not .Elections ) }}
+                <i>No Elections to show</i>
+            {{ else }}
+            {{ range $election := .Elections }}
+                <div class="subsection">
+                <div class="subsectioncontent">
+                    <div class="row"><span></span><h3 class="title">{{ $election.Title }}</h3></div>
+                    <div class="row"><span class="desc">{{ $election.Description }}</span></div>
+                    <div class="row"><span>Open until</span><span class="expiration">{{ $election.Expiration }}</span></div>
+
+                    <div class="choices">
+                        <div class="row"><span>Choices</span></div>
+
+                        {{ range $choice := $election.Choices }}
+                            <div class="row"><span class="choice">{{ $choice.Name }}</span></div>
+                        {{ end }}
+                    </div>
+                </div>
+                </div>
+            {{ end }}
+        </div>
+
+        {{ end }}
+    </div>
+</body>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&display=swap');
+
+* {
+    padding: 0;
+    margin: 0;
+    box-sizing: content-box;
+}
+
+body {
+    font-family: 'Open Sans', sans-serif;
+
+	background: #42275a;  /* fallback for old browsers */
+	background: -webkit-linear-gradient(to right, #734b6d, #42275a);  /* Chrome 10-25, Safari 5.1-6 */
+	background: linear-gradient(to right, #734b6d, #42275a); /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */	
+
+    color: #fff;
+
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: top;
+
+    min-height: 100vh;
+    margin: 0;
+    padding: 50px;
+}
+
+div.section {
+    max-width: 800px;
+    position: relative;
+    padding: 50px 0 0 0;
+}
+
+div.subsection {
+    padding: 20px 0 0 0;
+}
+
+div.subsectioncontent {
+    border-left: 3px solid gray;
+    padding-left: 15px;
+}
+
+div.choices {
+    padding: 20px 0 0 0;
+}
+
+span.choice {
+    padding-left: 15px;
+}
+
+span.expiration{
+    padding-left: 5px;
+}
+
+</style>
+</html>

@@ -5,9 +5,10 @@ import "time"
 type Election struct {
 	ElectionID    string
 	Initiator     string
+	Title         string
+	Description   string
 	Choices       []Choice
 	Expiration    time.Time
-	Description   string
 	MixnetServers []string
 	Winner        string
 	Votes         []string

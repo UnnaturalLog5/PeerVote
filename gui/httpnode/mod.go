@@ -68,6 +68,7 @@ func NewHTTPNode(node peer.Peer, conf peer.Configuration) Proxy {
 	servicectrl := controller.NewServiceCtrl(node, &log)
 	datasharingctrl := controller.NewDataSharing(node, &log)
 	blockchain := controller.NewBlockchain(conf, &log)
+	voting := controller.NewVoting(node, conf, &log)
 
 	mux.Handle("/messaging/peers", http.HandlerFunc(messagingctrl.PeerHandler()))
 	mux.Handle("/messaging/routing", http.HandlerFunc(messagingctrl.RoutingHandler()))
@@ -94,6 +95,8 @@ func NewHTTPNode(node peer.Peer, conf peer.Configuration) Proxy {
 	mux.Handle("/datasharing/searchFirst", http.HandlerFunc(datasharingctrl.SearchFirstHandler()))
 
 	mux.Handle("/blockchain", http.HandlerFunc(blockchain.BlockchainHandler()))
+
+	mux.Handle("/peervote", http.HandlerFunc(voting.VotingHandler()))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not authorized", http.StatusBadGateway)
