@@ -131,7 +131,6 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 // - implements peer.Peer
 type node struct {
 	peer.Peer
-	peer.DataSharing
 
 	// sending a message on this channel will stop the node after it has been started
 	stopPeer chan struct{}

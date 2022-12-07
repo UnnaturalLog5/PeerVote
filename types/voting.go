@@ -14,7 +14,7 @@ func (m StartElectionMessage) Name() string {
 
 // String implements types.Message.
 func (m StartElectionMessage) String() string {
-	return fmt.Sprintf("<%s> - Election: %s", m.ElectionID, m.Description)
+	return fmt.Sprintf("<%s> - Election: %s", m.Base.ElectionID, m.Base.Description)
 }
 
 // HTML implements types.Message.
@@ -36,7 +36,7 @@ func (m VoteMessage) Name() string {
 
 // String implements types.Message.
 func (m VoteMessage) String() string {
-	return fmt.Sprintf("<%s> - Vote: %s", m.ElectionID, m.Vote)
+	return fmt.Sprintf("<%s> - Vote: %s", m.ElectionID, m.ChoiceID)
 }
 
 // HTML implements types.Message.
@@ -58,7 +58,17 @@ func (m ResultMessage) Name() string {
 
 // String implements types.Message.
 func (m ResultMessage) String() string {
-	return fmt.Sprintf("<%s> - Winner: %s", m.ElectionID, m.Winner)
+	highestCount := uint(0)
+	winner := ""
+
+	for choice, count := range m.Results {
+		if count > highestCount {
+			winner = choice
+			highestCount = count
+		}
+	}
+
+	return fmt.Sprintf("<%s> - Winner: %s", m.ElectionID, winner)
 }
 
 // HTML implements types.Message.

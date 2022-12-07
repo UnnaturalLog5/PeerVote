@@ -7,7 +7,7 @@ import (
 )
 
 type Voting interface {
-	StartElection(choices []string, expirationTime time.Time) (string, error)
+	StartElection(title, description string, choices, mixnetServers []string, expirationTime time.Time) (string, error)
 
 	GetElections() []types.Election
 

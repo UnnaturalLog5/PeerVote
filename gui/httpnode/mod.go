@@ -96,7 +96,9 @@ func NewHTTPNode(node peer.Peer, conf peer.Configuration) Proxy {
 
 	mux.Handle("/blockchain", http.HandlerFunc(blockchain.BlockchainHandler()))
 
-	mux.Handle("/peervote", http.HandlerFunc(voting.VotingHandler()))
+	mux.Handle("/peervote", http.HandlerFunc(voting.VotingPageHandler()))
+	mux.Handle("/peervote/elections", http.HandlerFunc(voting.ElectionsHandler()))
+	mux.Handle("/peervote/elections/vote", http.HandlerFunc(voting.VoteHandler()))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not authorized", http.StatusBadGateway)

@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"errors"
 	"time"
 
 	"github.com/rs/xid"
@@ -9,7 +8,7 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-func (n *node) StartElection(choices []string, expirationTime time.Time) (string, error) {
+func (n *node) StartElection(title, description string, choices, mixnetServers []string, expirationTime time.Time) (string, error) {
 	// generate election id
 	electionChoices := []types.Choice{}
 	for _, choice := range choices {
@@ -19,23 +18,17 @@ func (n *node) StartElection(choices []string, expirationTime time.Time) (string
 		})
 	}
 
-	// TODO
-	// for now just set random neighbors as mixnet servers
-	random_neighbor, ok := n.routingTable.GetRandomNeighbor()
-	if !ok {
-		return "", errors.New("no neighbor")
-	}
-	mixnetServers := []string{
-		random_neighbor,
-	}
-
 	electionID := xid.New().String()
 	startElectionMessage := types.StartElectionMessage{
-		ElectionID:    electionID,
-		Initiator:     n.myAddr,
-		Choices:       electionChoices,
-		Expiration:    expirationTime,
-		MixnetServers: mixnetServers,
+		Base: types.ElectionBase{
+			ElectionID:    electionID,
+			Initiator:     n.myAddr,
+			Title:         title,
+			Description:   description,
+			Choices:       electionChoices,
+			Expiration:    expirationTime,
+			MixnetServers: mixnetServers,
+		},
 	}
 
 	err := n.sendStartElectionMessage(startElectionMessage)
@@ -56,11 +49,11 @@ func (n *node) Vote(electionID string, choiceID string) error {
 	// broadcast as private message
 	voteMessage := types.VoteMessage{
 		ElectionID: electionID,
-		Vote:       choiceID,
+		ChoiceID:   choiceID,
 	}
 
 	election := n.electionStore.Get(electionID)
-	mixnetServer := election.MixnetServers[0]
+	mixnetServer := election.Base.MixnetServers[0]
 
 	err := n.sendVoteMessage(mixnetServer, voteMessage)
 	if err != nil {
@@ -99,26 +92,32 @@ func (n *node) Vote(electionID string, choiceID string) error {
 func (n *node) Tally(electionID string) {
 	election := n.electionStore.Get(electionID)
 
-	results := map[string]int{}
+	results := map[string]uint{}
 	for _, vote := range election.Votes {
-		results[vote]++
-	}
-
-	highestCount := 0
-	winner := ""
-	for choice, count := range results {
-		if count > highestCount {
-			winner = choice
-		}
+		results[vote] += 1
 	}
 
 	resultMessage := types.ResultMessage{
 		ElectionID: electionID,
-		Winner:     winner,
+		Results:    results,
 	}
 
 	err := n.sendResultsMessage(resultMessage)
 	if err != nil {
 		log.Err(err).Str("peerAddr", n.myAddr).Msgf("error broadcasting election results")
 	}
+}
+
+func GetWinner(results map[string]uint) string {
+	highestCount := uint(0)
+	winner := ""
+
+	for choice, count := range results {
+		if count > highestCount {
+			winner = choice
+			highestCount = count
+		}
+	}
+
+	return winner
 }

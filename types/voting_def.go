@@ -2,7 +2,7 @@ package types
 
 import "time"
 
-type Election struct {
+type ElectionBase struct {
 	ElectionID    string
 	Initiator     string
 	Title         string
@@ -10,9 +10,12 @@ type Election struct {
 	Choices       []Choice
 	Expiration    time.Time
 	MixnetServers []string
-	Winner        string
-	Votes         []string
-	// Proofs
+}
+
+type Election struct {
+	Base    ElectionBase
+	Results map[string]uint
+	Votes   []string
 }
 
 type Choice struct {
@@ -21,17 +24,12 @@ type Choice struct {
 }
 
 type StartElectionMessage struct {
-	ElectionID    string
-	Initiator     string
-	Choices       []Choice
-	Expiration    time.Time
-	Description   string
-	MixnetServers []string
+	Base ElectionBase
 }
 
 type VoteMessage struct {
 	ElectionID string
-	Vote       string
+	ChoiceID   string
 	// Proof
 }
 
@@ -43,6 +41,6 @@ type VoteMessage struct {
 
 type ResultMessage struct {
 	ElectionID string
-	Winner     string
+	Results    map[string]uint
 	// Proof
 }

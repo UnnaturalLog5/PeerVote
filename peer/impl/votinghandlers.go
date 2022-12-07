@@ -20,26 +20,21 @@ func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet)
 	}
 
 	election := types.Election{
-		ElectionID:    startElectionMessage.ElectionID,
-		Initiator:     startElectionMessage.Initiator,
-		Choices:       startElectionMessage.Choices,
-		Expiration:    startElectionMessage.Expiration,
-		Description:   startElectionMessage.Description,
-		MixnetServers: startElectionMessage.MixnetServers,
+		Base: startElectionMessage.Base,
 	}
 
-	if n.electionStore.Exists(election.ElectionID) {
+	if n.electionStore.Exists(election.Base.ElectionID) {
 		return errors.New("election already exists")
 	}
 
-	n.electionStore.Set(election.ElectionID, election)
+	n.electionStore.Set(election.Base.ElectionID, election)
 
 	// TODO
 	// if i am the first mixnet server, set timer for expiration to start with mixing
-	if election.MixnetServers[0] == n.myAddr {
+	if election.Base.MixnetServers[0] == n.myAddr {
 		go func() {
 			// wait until the set expiration date until tallying votes
-			expireIn := election.Expiration.Sub(time.Now())
+			expireIn := election.Base.Expiration.Sub(time.Now())
 			<-time.After(expireIn)
 
 			// TODO
@@ -47,7 +42,7 @@ func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet)
 			// n.MixAndForward()
 
 			// for now just start tallying
-			n.Tally(election.ElectionID)
+			n.Tally(election.Base.ElectionID)
 		}()
 	}
 	return nil
@@ -70,11 +65,11 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 	// }
 
 	// accept if not expired
-	if !time.Now().Before(election.Expiration) {
+	if !time.Now().Before(election.Base.Expiration) {
 		return errors.New("this election expired - vote won't be accepted")
 	}
 
-	n.electionStore.StoreVote(election.ElectionID, voteMessage.Vote)
+	n.electionStore.StoreVote(election.Base.ElectionID, voteMessage.ChoiceID)
 
 	return nil
 }
@@ -93,8 +88,8 @@ func (n *node) HandleResultMessage(t types.Message, pkt transport.Packet) error 
 	// should be unproblematic in this step
 	// but it _might_ cause some nasty bugs
 	election := n.electionStore.Get(resultMessage.ElectionID)
-	election.Winner = resultMessage.Winner
-	n.electionStore.Set(election.ElectionID, election)
+	election.Results = resultMessage.Results
+	n.electionStore.Set(election.Base.ElectionID, election)
 
 	return nil
 }
