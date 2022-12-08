@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/types"
 )
@@ -40,61 +41,27 @@ func (v voting) VotingPageHandler() http.HandlerFunc {
 }
 
 type electionView struct {
-	ElectionID    string
-	Initiator     string
-	Title         string
-	Description   string
-	Choices       []types.Choice
-	Expiration    string
-	MixnetServers []string
-	Winner        string
+	Base types.ElectionBase
+	// use this over the one in Base, as this one is nicely formatted
+	Expiration string
+	MyVote     string
 }
 
 func (v voting) votingGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	// choices := []types.Choice{
-	// 	{
-	// 		ChoiceID: xid.New().String(),
-	// 		Name:     "choice 1",
-	// 	},
-	// 	{
-	// 		ChoiceID: xid.New().String(),
-	// 		Name:     "choice 2",
-	// 	},
-	// }
 
 	electionViews := []electionView{}
 
 	elections := v.node.GetElections()
 	for _, election := range elections {
 		electionV := electionView{
-			ElectionID:    election.Base.ElectionID,
-			Initiator:     election.Base.Initiator,
-			Title:         election.Base.Title,
-			Description:   election.Base.Description,
-			Choices:       election.Base.Choices,
-			Expiration:    election.Base.Expiration.Format(time.ANSIC),
-			MixnetServers: election.Base.MixnetServers,
+			Base:       election.Base,
+			Expiration: election.Base.Expiration.Format(time.ANSIC),
+			MyVote:     election.MyVote,
 		}
 
 		electionViews = append(electionViews, electionV)
 	}
-
-	// election := electionView{
-	// 	ElectionID:    "1",
-	// 	Initiator:     "127.0.0.1:1",
-	// 	Title:         "Election for Best Project",
-	// 	Description:   "We can vote on anything we like.",
-	// 	Choices:       choices,
-	// 	Expiration:    time.Now().Add(time.Second * 60).Format(time.ANSIC),
-	// 	MixnetServers: []string{"127.0.0.1:1"},
-	// }
-
-	// electionViews := []electionView{
-	// 	election,
-	// 	election,
-	// }
 
 	routingTable := v.node.GetRoutingTable()
 	peers := []string{}
@@ -114,6 +81,7 @@ func (v voting) votingGet(w http.ResponseWriter, r *http.Request) {
 
 	tmpl, err := template.New("html").ParseFiles(("httpnode/controller/voting.gohtml"))
 	if err != nil {
+		log.Err(err).Msg("failed to parse template")
 		http.Error(w, "failed to parse template: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -179,10 +147,8 @@ func (v voting) electionsPost(w http.ResponseWriter, r *http.Request) {
 
 	_, err = v.node.StartElection(res.Title, res.Description, res.Choices, res.MixnetServers, expirationTime)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("%v, %v", string(buf), res)+err.Error(),
+		http.Error(w, "failed to start election: "+err.Error(),
 			http.StatusInternalServerError)
-		// http.Error(w, "failed to start election: "+err.Error(),
-		// 	http.StatusInternalServerError)
 		return
 	}
 }

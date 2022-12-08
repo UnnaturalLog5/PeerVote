@@ -82,13 +82,13 @@ func (s *store) Set(key string, val types.Election) {
 	s.data[string(key)] = val
 }
 
-func (s *store) StoreVote(key, encryptedVote string) {
+func (s *store) StoreVote(key, vote string) {
 	s.Lock()
 	defer s.Unlock()
 
 	election := s.data[key]
 
-	election.Votes = append(election.Votes, encryptedVote)
+	election.Votes = append(election.Votes, vote)
 
 	s.data[key] = election
 }

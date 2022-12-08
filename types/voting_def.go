@@ -14,6 +14,7 @@ type ElectionBase struct {
 
 type Election struct {
 	Base    ElectionBase
+	MyVote  string
 	Results map[string]uint
 	Votes   []string
 }

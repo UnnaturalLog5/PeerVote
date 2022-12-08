@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"errors"
 	"time"
 
 	"github.com/rs/xid"
@@ -53,8 +54,18 @@ func (n *node) Vote(electionID string, choiceID string) error {
 	}
 
 	election := n.electionStore.Get(electionID)
-	mixnetServer := election.Base.MixnetServers[0]
 
+	if election.MyVote != "" {
+		return errors.New("this peer has already voted")
+	}
+
+	// TODO
+	// rethink this mechanism, this might cause bugs when the vote is stored here
+	// but sendVoteMessage fails without at least locally processing the rumor
+	election.MyVote = voteMessage.ChoiceID
+	n.electionStore.Set(voteMessage.ElectionID, election)
+
+	mixnetServer := election.Base.MixnetServers[0]
 	err := n.sendVoteMessage(mixnetServer, voteMessage)
 	if err != nil {
 		return err

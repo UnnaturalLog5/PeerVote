@@ -58,12 +58,6 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 
 	election := n.electionStore.Get(voteMessage.ElectionID)
 
-	// only handle if we're the first mixnet server
-	// actually, this should be sent in a private message so we don't need this
-	// if election.MixnetServers[0] == n.myAddr {
-	// 	return nil
-	// }
-
 	// accept if not expired
 	if !time.Now().Before(election.Base.Expiration) {
 		return errors.New("this election expired - vote won't be accepted")
