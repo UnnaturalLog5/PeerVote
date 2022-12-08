@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"text/template"
 	"time"
 
@@ -51,8 +52,12 @@ func (v voting) votingGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	electionViews := []electionView{}
-
 	elections := v.node.GetElections()
+
+	sort.SliceStable(elections, func(i, j int) bool {
+		return elections[i].Base.ElectionID > elections[j].Base.ElectionID
+	})
+
 	for _, election := range elections {
 		electionV := electionView{
 			Base:       election.Base,

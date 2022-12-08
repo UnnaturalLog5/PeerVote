@@ -32,7 +32,10 @@
                     method: "POST",
                     body: JSON.stringify(body)
                 })
-            .then(function(res){ console.log(res) })
+            .then(function(res){
+                    console.log(res)
+                    location.reload()
+                })
             .catch(function(res){ console.log(res) })
         }
         })
@@ -48,8 +51,6 @@
                 "ChoiceID": this.choiceidTarget.value,
             }
 
-            console.log(event)
-
             fetch("/peervote/elections/vote",
                 {
                     headers: {
@@ -58,7 +59,10 @@
                     method: "POST",
                     body: JSON.stringify(body)
                 })
-            .then(function(res){ console.log(res) })
+            .then(function(res){
+                    console.log(res)
+                    location.reload()
+                })
             .catch(function(res){ console.log(res) })
         }
         })
@@ -119,39 +123,22 @@
                     <div data-controller="vote" class="choices">
                     <div class="row"><span>Choices</span></div>
 
-                    {{/* <select data-vote-target="mixnetservers" name="mixnetservers" multiple="yes">
-                        {{ range .Servers }}
-                            <option value="{{ . }}">{{ . }}</option>
-                        {{ end }}
-                    </select> */}}
-
-                    {{ range $choice := $election.Base.Choices }}
-                    <div class="row">
-                    <span class="choice">
-                        <input
-                            data-vote-target="choiceid"
-                            {{/* data-vote-id-param="{{ $choice.ChoiceID }}" */}}
-                            type="radio"
-                            name="vote-{{ $election.Base.ElectionID }}"
-                            value="{{ $choice.ChoiceID }}"
-                            {{ if $election.MyVote }}
-                                disabled
-                            {{ end }}
-                            {{ if eq $election.MyVote $choice.ChoiceID }}
-                                checked
-                            {{ end }}
-                        >
-                        {{ $choice.Name }}
-                        {{ if eq $election.MyVote $choice.ChoiceID }}
-                            (x)
-                        {{ end }}
-                    </span>
-                    </div>
-                    {{ end }}
-
                     {{ if $election.MyVote }}
+                        {{ range $choice := $election.Base.Choices }}
+                        <div class="row choice">
+                            {{ if eq $election.MyVote $choice.ChoiceID }}
+                            <span>(x)</span>
+                            {{ end }}
+                            {{ $choice.Name }}
+                        </div>
+                        {{ end }}
                         <div class="row"><span>You already voted!</span></div>
                     {{ else }}
+                        <select data-vote-target="choiceid" name="choiceid">
+                            {{ range $choice := $election.Base.Choices }}
+                                <option value="{{ $choice.ChoiceID }}">{{ $choice.Name }}</option>
+                            {{ end }}
+                        </select>
                         <button 
                             data-action="click->vote#onSubmit"
                             data-vote-electionid-param="{{ $election.Base.ElectionID }}"
@@ -227,7 +214,7 @@ div.choices {
     padding: 20px 0 0 0;
 }
 
-span.choice {
+div.choice {
     padding-left: 15px;
 }
 
