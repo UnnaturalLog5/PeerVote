@@ -85,14 +85,17 @@ func (v voting) votingGet(w http.ResponseWriter, r *http.Request) {
 		Elections: electionViews,
 	}
 
-	tmpl, err := template.New("html").ParseFiles("httpnode/controller/election.gohtml", "httpnode/controller/voting.gohtml")
+	tmpl, err := template.New("html").ParseFiles("httpnode/controller/elections.gohtml")
 	if err != nil {
 		log.Err(err).Msg("failed to parse template")
 		http.Error(w, "failed to parse template: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	tmpl.ExecuteTemplate(w, "voting.gohtml", viewData)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	tmpl.ExecuteTemplate(w, "elections.gohtml", viewData)
 }
 
 // ---
@@ -129,6 +132,7 @@ func (v voting) electionsGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	w.Write(res)
 }

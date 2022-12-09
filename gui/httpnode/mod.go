@@ -100,10 +100,10 @@ func NewHTTPNode(node peer.Peer, conf peer.Configuration) Proxy {
 	mux.Handle("/peervote/elections", http.HandlerFunc(voting.ElectionsHandler()))
 	mux.Handle("/peervote/elections/vote", http.HandlerFunc(voting.VoteHandler()))
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "not authorized", http.StatusBadGateway)
-		log.Error().Msgf("wrong endpoint: %s", r.URL.Path)
-	})
+	dir := http.Dir("./web")
+	fs := http.FileServer(dir)
+
+	mux.Handle("/", fs)
 
 	return &httpnode{
 		Peer: node,

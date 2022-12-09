@@ -9,8 +9,10 @@
 // controller as the `this.yyyTarget` variable. See
 // https://stimulus.hotwired.dev/ for a complete introduction.
 
+import { Application, Controller } from "./stimulus.js";
+
 const main = function () {
-  const application = Stimulus.Application.start();
+  const application = Application.start();
 
   application.register("flash", Flash);
   application.register("peerInfo", PeerInfo);
@@ -23,6 +25,8 @@ const main = function () {
   application.register("dataSharing", DataSharing);
   application.register("search", Search);
   application.register("naming", Naming);
+  application.register("elections", Elections);
+  application.register("vote", Vote);
 
   initCollapsible();
 };
@@ -52,7 +56,7 @@ function initCollapsible() {
 }
 
 // BaseElement is inherited by all the controllers. It provides common methods.
-class BaseElement extends Stimulus.Controller {
+class BaseElement extends Controller {
   // checkInputs is a utility function to checks if form inputs are empty or
   // not. It takes care of displaying an appropriate message if a validation
   // fails. The caller should exit if this function returns false.
@@ -98,7 +102,7 @@ class BaseElement extends Stimulus.Controller {
   }
 }
 
-class Flash extends Stimulus.Controller {
+class Flash extends Controller {
   static get targets() {
     return ["wrapper"];
   }
@@ -142,7 +146,7 @@ class Flash extends Stimulus.Controller {
   }
 }
 
-class PeerInfo extends Stimulus.Controller {
+class PeerInfo extends Controller {
   static get targets() {
     return ["peerAddr", "socketAddr"];
   }
@@ -154,7 +158,6 @@ class PeerInfo extends Stimulus.Controller {
     this.endpoint = endpoint;
 
     this.peerAddrTarget.innerText = this.endpoint;
-    console.log(this.endpoint);
 
     const addr = this.endpoint + "/socket/address";
 
@@ -197,7 +200,7 @@ class PeerInfo extends Stimulus.Controller {
 
 class Elections extends BaseElement {
   static get targets() {
-    return ["holder", "messages"];
+    return ["elections"];
   }
 
   initialize() {
@@ -205,32 +208,58 @@ class Elections extends BaseElement {
   }
 
   async update() {
-    const addr = this.peerInfo.getAPIURL("/peervote/elections");
+    // generate this html serverside
+    const addr = this.peerInfo.getAPIURL("/peervote");
 
     try {
       const resp = await this.fetch(addr);
-      const data = await resp.json();
+      const html = await resp.text();
 
-      //   this.tableTarget.innerHTML = "";
-
-      //   for (const [origin, relay] of Object.entries(data)) {
-      //     const el = document.createElement("tr");
-
-      //     el.innerHTML = `<td>${origin}</td><td>${relay}</td>`;
-      //     this.tableTarget.appendChild(el);
-      //   }
-
-      console.log(data);
+      this.electionsTarget.innerHTML = html;
 
       this.flash.printSuccess("Elections updated");
     } catch (e) {
       this.flash.printError("Failed to fetch elections: " + e);
     }
   }
+}
 
-  addMsg(el) {
-    // this.messagesTarget.append(el);
-    // this.holderTarget.scrollTop = this.holderTarget.scrollHeight;
+class Vote extends BaseElement {
+  static get targets() {
+    return ["holder"];
+  }
+
+  static outlets = ["elections"];
+
+  onToggle(event) {
+    this.choiceID = event.params.choiceid;
+    this.electionID = event.params.electionid;
+  }
+
+  async onSubmit() {
+    const body = {
+      ChoiceID: this.choiceID,
+      ElectionID: this.electionID,
+    };
+
+    const fetchArgs = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    };
+
+    try {
+      const addr = this.peerInfo.getAPIURL("/peervote/elections/vote");
+      await this.fetch(addr, fetchArgs);
+
+      this.electionsOutlet.update();
+    } catch (e) {
+      this.flash.printError(
+        "failed to update elections, update manually: " + e
+      );
+    }
   }
 }
 
@@ -915,3 +944,5 @@ class Naming extends BaseElement {
     }
   }
 }
+
+main();

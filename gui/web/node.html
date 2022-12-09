@@ -25,7 +25,7 @@
     <div class="elections" data-controller="elections">
       <h2 class="collapsible">Elections</h2>
 
-      <div></div>
+      <div data-elections-target="elections"></div>
     </div>
 
     <div data-controller="messaging" id="messaging" class="messaging">
@@ -473,12 +473,9 @@
       </div>
     </div>
 
-    <script src="assets/scripts/stimulus.js"></script>
+    <script src="assets/scripts/stimulus.js" type="module"></script>
     <script src="assets/scripts/viz.js"></script>
     <script src="assets/scripts/viz.lite.render.js"></script>
-    <script src="assets/scripts/main.js"></script>
-    <script type="text/javascript">
-      main(); // launch javascript when ready
-    </script>
+    <script src="assets/scripts/main.js" type="module"></script>
   </body>
 </html>

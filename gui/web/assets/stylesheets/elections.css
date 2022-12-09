@@ -5,3 +5,15 @@ div.elections {
   max-height: 400px;
   overflow: auto;
 }
+
+div.choices {
+    padding: 20px 0 0 0;
+}
+
+div.choice {
+    padding-left: 15px;
+}
+
+span.expiration{
+    padding-left: 5px;
+}
