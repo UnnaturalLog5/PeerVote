@@ -1,3 +1,65 @@
+{{ define "votesResults" }}
+    {{ range $choice, $votes := .Results }}
+        <div>{{ $choice }}: {{ $votes }}</div>
+    {{ end }}
+{{ end }}
+
+{{ define "votesVoted" }}
+    {{ range $choice := .Base.Choices }}
+    <div class="row choice">
+        {{ if eq .MyVote $choice.ChoiceID }}
+        <span>(x)</span>
+        {{ end }}
+        {{ $choice.Name }}
+    </div>
+    {{ end }}
+    <div class="row"><span>You already voted!</span></div>
+{{ end }}
+
+{{ define "votesNotVoted" }}
+    <select data-vote-target="choiceid" name="choiceid">
+        {{ range $choice := .Base.Choices }}
+            <option value="{{ $choice.ChoiceID }}">{{ $choice.Name }}</option>
+        {{ end }}
+    </select>
+    <button 
+        data-action="click->vote#onSubmit"
+        data-vote-electionid-param="{{ .Base.ElectionID }}"
+        {{ if .MyVote }}
+            disabled
+        {{ end }}
+    >
+        {{/* <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 0l-6 22-8.129-7.239 7.802-8.234-10.458 7.227-7.215-1.754 24-12zm-15 16.668v7.332l3.258-4.431-3.258-2.901z"/></svg> */}}
+        Submit
+    </button>
+{{ end }}
+
+{{ define "elections"}}
+    {{ range $election := . }}
+        <div class="subsection">
+        <div class="subsectioncontent">
+            <div class="row"><h3 class="title">{{ $election.Base.Title }}</h3></div>
+            <div class="row"><span class="desc">{{ $election.Base.Description }}</span></div>
+            <div class="row"><span>Open until</span><span class="expiration">{{ $election.Expiration }}</span></div>
+
+            <div data-controller="vote" class="choices">
+            <div class="row"><span>Choices</span></div>
+
+            {{ if $election.Results }}
+                {{ template "votesResults" $election }}
+            {{ else if $election.MyVote }}
+                {{ template "votesVoted" $election }}
+            {{ else }}
+                {{ template "votesNotVoted" $election }}
+            {{ end }}
+            </div>
+        </div>
+        </div>
+    {{ else }}
+        <i>No Elections to show</i>
+    {{ end }}
+{{ end }}
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -137,50 +199,8 @@
         </div>
 
         <div class="section">
-        <h2>Elections</h2>
-        {{ range $election := .Elections }}
-            <div class="subsection">
-            <div class="subsectioncontent">
-                <div class="row"><h3 class="title">{{ $election.Base.Title }}</h3></div>
-                <div class="row"><span class="desc">{{ $election.Base.Description }}</span></div>
-                <div class="row"><span>Open until</span><span class="expiration">{{ $election.Expiration }}</span></div>
-
-                <div data-controller="vote" class="choices">
-                <div class="row"><span>Choices</span></div>
-                
-                {{ if $election.MyVote }}
-                    {{ range $choice := $election.Base.Choices }}
-                    <div class="row choice">
-                        {{ if eq $election.MyVote $choice.ChoiceID }}
-                        <span>(x)</span>
-                        {{ end }}
-                        {{ $choice.Name }}
-                    </div>
-                    {{ end }}
-                    <div class="row"><span>You already voted!</span></div>
-                {{ else }}
-                    <select data-vote-target="choiceid" name="choiceid">
-                        {{ range $choice := $election.Base.Choices }}
-                            <option value="{{ $choice.ChoiceID }}">{{ $choice.Name }}</option>
-                        {{ end }}
-                    </select>
-                    <button 
-                        data-action="click->vote#onSubmit"
-                        data-vote-electionid-param="{{ $election.Base.ElectionID }}"
-                        {{ if $election.MyVote }}
-                            disabled
-                        {{ end }}
-                    >
-                        {{/* <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 0l-6 22-8.129-7.239 7.802-8.234-10.458 7.227-7.215-1.754 24-12zm-15 16.668v7.332l3.258-4.431-3.258-2.901z"/></svg> */}}
-                        Submit
-                    </button>
-                {{ end }}
-                </div>
-            </div>
-            </div>
-        {{ else }}
-            <i>No Elections to show</i>
-        {{ end }}
+            <h2>Elections</h2>
+            {{ template "elections" .Elections }}
         </div>
     </div>
 </body>

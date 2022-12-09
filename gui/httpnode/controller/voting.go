@@ -85,7 +85,7 @@ func (v voting) votingGet(w http.ResponseWriter, r *http.Request) {
 		Elections: electionViews,
 	}
 
-	tmpl, err := template.New("html").ParseFiles(("httpnode/controller/voting.gohtml"))
+	tmpl, err := template.New("html").ParseFiles("httpnode/controller/election.gohtml", "httpnode/controller/voting.gohtml")
 	if err != nil {
 		log.Err(err).Msg("failed to parse template")
 		http.Error(w, "failed to parse template: "+err.Error(), http.StatusInternalServerError)
