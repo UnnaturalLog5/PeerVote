@@ -8,12 +8,32 @@
         window.Stimulus = Application.start()
 
         Stimulus.register("startelection", class extends Controller {
+        initialize() {
+            this.choices = [];
+        }
+
         static targets = [
                             "title",
                             "description",
                             "expirationtime",
-                            "mixnetservers"
+                            "mixnetservers",
+                            "choiceinput",
+                            "choices"
                          ]
+
+        onAddChoice() {
+            const choice = this.choiceinputTarget.value
+            // keep track of it internally
+            this.choices.push(choice)
+            this.choiceinputTarget.value = ""
+
+            const choiceEl = document.createElement("div")
+            choiceEl.class = "choice"
+            choiceEl.innerText = choice
+
+            // and in UI
+            this.choicesTarget.appendChild(choiceEl);
+        }
 
         onSubmit() {
             const body = {
@@ -21,7 +41,7 @@
                 "Description": this.descriptionTarget.value,
                 "Expirationtime": parseInt(this.expirationtimeTarget.value),
                 "Mixnetservers": [this.mixnetserversTarget.value],
-                "Choices": ["a", "b"]
+                "Choices": this.choices
             }
 
             fetch("/peervote/elections",
@@ -100,6 +120,11 @@
                 {{ end }}
                 </select>
             </div>
+            <div class="row"><span>Choices</span></div>
+            <input data-startelection-target="choiceinput" name="time" type="text" placeholder="choice"/> 
+            <a data-action="click->startelection#onAddChoice">Add</a>
+            <div class="row" data-startelection-target="choices"></div>
+
 
             <div class="row">
                 <button data-action="click->startelection#onSubmit">
@@ -113,58 +138,50 @@
 
         <div class="section">
         <h2>Elections</h2>
-            {{ range $election := .Elections }}
-                <div class="subsection">
-                <div class="subsectioncontent">
-                    <div class="row"><h3 class="title">{{ $election.Base.Title }}</h3></div>
-                    <div class="row"><span class="desc">{{ $election.Base.Description }}</span></div>
-                    <div class="row"><span>Open until</span><span class="expiration">{{ $election.Expiration }}</span></div>
+        {{ range $election := .Elections }}
+            <div class="subsection">
+            <div class="subsectioncontent">
+                <div class="row"><h3 class="title">{{ $election.Base.Title }}</h3></div>
+                <div class="row"><span class="desc">{{ $election.Base.Description }}</span></div>
+                <div class="row"><span>Open until</span><span class="expiration">{{ $election.Expiration }}</span></div>
 
-                    <div data-controller="vote" class="choices">
-                    <div class="row"><span>Choices</span></div>
-
-                    {{ if $election.MyVote }}
-                        {{ range $choice := $election.Base.Choices }}
-                        <div class="row choice">
-                            {{ if eq $election.MyVote $choice.ChoiceID }}
-                            <span>(x)</span>
-                            {{ end }}
-                            {{ $choice.Name }}
-                        </div>
+                <div data-controller="vote" class="choices">
+                <div class="row"><span>Choices</span></div>
+                
+                {{ if $election.MyVote }}
+                    {{ range $choice := $election.Base.Choices }}
+                    <div class="row choice">
+                        {{ if eq $election.MyVote $choice.ChoiceID }}
+                        <span>(x)</span>
                         {{ end }}
-                        <div class="row"><span>You already voted!</span></div>
-                    {{ else }}
-                        <select data-vote-target="choiceid" name="choiceid">
-                            {{ range $choice := $election.Base.Choices }}
-                                <option value="{{ $choice.ChoiceID }}">{{ $choice.Name }}</option>
-                            {{ end }}
-                        </select>
-                        <button 
-                            data-action="click->vote#onSubmit"
-                            data-vote-electionid-param="{{ $election.Base.ElectionID }}"
-                            {{ if $election.MyVote }}
-                                disabled
-                            {{ end }}
-                        >
-                            {{/* <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 0l-6 22-8.129-7.239 7.802-8.234-10.458 7.227-7.215-1.754 24-12zm-15 16.668v7.332l3.258-4.431-3.258-2.901z"/></svg> */}}
-                            Submit
-                        </button>
-                    {{ end }}
+                        {{ $choice.Name }}
                     </div>
+                    {{ end }}
+                    <div class="row"><span>You already voted!</span></div>
+                {{ else }}
+                    <select data-vote-target="choiceid" name="choiceid">
+                        {{ range $choice := $election.Base.Choices }}
+                            <option value="{{ $choice.ChoiceID }}">{{ $choice.Name }}</option>
+                        {{ end }}
+                    </select>
+                    <button 
+                        data-action="click->vote#onSubmit"
+                        data-vote-electionid-param="{{ $election.Base.ElectionID }}"
+                        {{ if $election.MyVote }}
+                            disabled
+                        {{ end }}
+                    >
+                        {{/* <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M24 0l-6 22-8.129-7.239 7.802-8.234-10.458 7.227-7.215-1.754 24-12zm-15 16.668v7.332l3.258-4.431-3.258-2.901z"/></svg> */}}
+                        Submit
+                    </button>
+                {{ end }}
                 </div>
-                </div>
-
-                {{/* {{ if $election.Results }}
-
-                {{ end }} */}}
-            {{ else }}
-            {{ end }}
-            {{ if (not .Elections ) }}
-                <i>No Elections to show</i>
-            {{ else }}
-        </div>
-
+            </div>
+            </div>
+        {{ else }}
+            <i>No Elections to show</i>
         {{ end }}
+        </div>
     </div>
 </body>
 <style>

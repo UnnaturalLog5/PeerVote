@@ -46,6 +46,7 @@ type electionView struct {
 	// use this over the one in Base, as this one is nicely formatted
 	Expiration string
 	MyVote     string
+	Results    map[string]uint
 }
 
 func (v voting) votingGet(w http.ResponseWriter, r *http.Request) {
