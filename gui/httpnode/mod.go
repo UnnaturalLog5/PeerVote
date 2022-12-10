@@ -96,9 +96,10 @@ func NewHTTPNode(node peer.Peer, conf peer.Configuration) Proxy {
 
 	mux.Handle("/blockchain", http.HandlerFunc(blockchain.BlockchainHandler()))
 
-	mux.Handle("/peervote", http.HandlerFunc(voting.VotingPageHandler()))
+	mux.Handle("/peervote/elections/html", http.HandlerFunc(voting.ElectionsHTMLHandler()))
 	mux.Handle("/peervote/elections", http.HandlerFunc(voting.ElectionsHandler()))
-	mux.Handle("/peervote/elections/vote", http.HandlerFunc(voting.VoteHandler()))
+	mux.Handle("/peervote/vote", http.HandlerFunc(voting.VoteHandler()))
+	mux.Handle("/peervote/mixnetservers", http.HandlerFunc(voting.MixnetServerHandler()))
 
 	dir := http.Dir("./web")
 	fs := http.FileServer(dir)

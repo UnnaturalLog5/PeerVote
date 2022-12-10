@@ -30,11 +30,11 @@ func NewVoting(node peer.Peer, conf peer.Configuration, log *zerolog.Logger) vot
 	}
 }
 
-func (v voting) VotingPageHandler() http.HandlerFunc {
+func (v voting) ElectionsHTMLHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			v.votingGet(w, r)
+			v.electionsHTMLGet(w, r)
 		default:
 			http.Error(w, "forbidden method", http.StatusMethodNotAllowed)
 		}
@@ -49,7 +49,7 @@ type electionView struct {
 	Results    map[string]uint
 }
 
-func (v voting) votingGet(w http.ResponseWriter, r *http.Request) {
+func (v voting) electionsHTMLGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	electionViews := []electionView{}
@@ -69,19 +69,9 @@ func (v voting) votingGet(w http.ResponseWriter, r *http.Request) {
 		electionViews = append(electionViews, electionV)
 	}
 
-	routingTable := v.node.GetRoutingTable()
-	peers := []string{}
-	for peer := range routingTable {
-		peers = append(peers, peer)
-	}
-
 	viewData := struct {
-		NodeAddr  string
-		Servers   []string
 		Elections []electionView
 	}{
-		NodeAddr:  v.conf.Socket.GetAddress(),
-		Servers:   peers,
 		Elections: electionViews,
 	}
 
@@ -96,6 +86,39 @@ func (v voting) votingGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	tmpl.ExecuteTemplate(w, "elections.gohtml", viewData)
+}
+
+// ---
+
+func (v voting) MixnetServerHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			v.mixnetServersGet(w, r)
+		default:
+			http.Error(w, "forbidden method", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
+func (v voting) mixnetServersGet(w http.ResponseWriter, r *http.Request) {
+	routingTable := v.node.GetRoutingTable()
+	peers := []string{}
+	for peer := range routingTable {
+		peers = append(peers, peer)
+	}
+
+	res, err := json.Marshal(peers)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed marshal mixnetServer response: %v", err),
+			http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	w.Write(res)
 }
 
 // ---

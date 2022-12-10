@@ -21,6 +21,7 @@
     {{ $electionID := .Base.ElectionID }}
     <div data-controller="vote" data-vote-elections-outlet=".elections" class="choices">
         {{ range $choice := .Base.Choices }}
+        <div class="choice">
             <input
                 type="radio"
                 name="vote"
@@ -29,7 +30,8 @@
                 data-vote-electionid-param="{{ $electionID }}"
             >
             </input>
-            {{ $choice.Name }}
+            <span class="name">{{ $choice.Name }}</span>
+        </div>
         {{ end }}
         <button 
             data-action="click->vote#onSubmit"

@@ -27,6 +27,7 @@ const main = function () {
   application.register("naming", Naming);
   application.register("elections", Elections);
   application.register("vote", Vote);
+  application.register("startelection", StartElection);
 
   initCollapsible();
 };
@@ -63,7 +64,8 @@ class BaseElement extends Controller {
   checkInputs(...els) {
     for (let i = 0; i < els.length; i++) {
       const val = els[i].value;
-      if (val == "" || val == undefined) {
+      if (val == "" || val == undefined || val.length == 0) {
+        console.log(val);
         this.flash.printError(
           `form validation failed: "${els[i].name}" is empty or invalid`
         );
@@ -83,6 +85,18 @@ class BaseElement extends Controller {
     }
 
     return resp;
+  }
+
+  post(url, body) {
+    const fetchArgs = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    };
+
+    return fetch(url, fetchArgs);
   }
 
   get flash() {
@@ -152,10 +166,7 @@ class PeerInfo extends Controller {
   }
 
   async initialize() {
-    const queryDict = this.getQueryArgs();
-
-    const endpoint = "http://" + decodeURIComponent(queryDict["addr"]);
-    this.endpoint = endpoint;
+    this.endpoint = "http://" + window.location.href.split("/")[2];
 
     this.peerAddrTarget.innerText = this.endpoint;
 
@@ -198,6 +209,146 @@ class PeerInfo extends Controller {
   }
 }
 
+class StartElection extends BaseElement {
+  static targets = [
+    "title",
+    "description",
+    "expirationtime",
+    "mixnetserversselect",
+    "mixnetservers",
+    "choiceinput",
+    "choices",
+  ];
+
+  static outlets = ["elections"];
+
+  availablemixnetservers = [];
+  choices = [];
+  mixnetservers = [];
+
+  async initialize() {
+    this.availablemixnetservers = await this.getMixnetServers();
+    this.updateMixnetServerSelection();
+  }
+
+  async getMixnetServers() {
+    const addr = this.peerInfo.getAPIURL("/peervote/mixnetservers");
+
+    try {
+      const resp = await this.fetch(addr);
+
+      this.flash.printSuccess("MixnetServers updated");
+
+      return await resp.json();
+    } catch (e) {
+      this.flash.printError("Failed to fetch MixnetServers: " + e);
+      return [];
+    }
+  }
+
+  updateMixnetServerSelection() {
+    this.availablemixnetservers.forEach((mixnetserver) => {
+      const optionEl = document.createElement("option");
+      optionEl.value = mixnetserver;
+      optionEl.innerText = mixnetserver;
+
+      this.mixnetserversselectTarget.append(optionEl);
+    });
+  }
+
+  onAddMixnetServer() {
+    const mixnetserver = this.mixnetserversselectTarget.value;
+
+    this.mixnetservers.push(mixnetserver);
+    this.mixnetserversTarget;
+
+    const el = document.createElement("div");
+    el.className = "list-item";
+
+    const idx = this.mixnetserversTarget.children.length + 1;
+    el.innerText = `${idx}. ${mixnetserver}`;
+
+    this.mixnetserversTarget.appendChild(el);
+  }
+
+  onAddChoice() {
+    const choice = this.choiceinputTarget.value;
+
+    if (choice == "") {
+      return;
+    }
+
+    // keep track of it internally
+    this.choices.push(choice);
+    this.choiceinputTarget.value = "";
+
+    const choiceEl = document.createElement("div");
+    choiceEl.className = "list-item";
+
+    const radio = document.createElement("input");
+    radio.setAttribute("type", "radio");
+    radio.setAttribute("disabled", "true");
+
+    const name = document.createElement("span");
+    name.className = "name";
+    name.innerText = choice;
+
+    choiceEl.appendChild(radio);
+    choiceEl.appendChild(name);
+
+    // and in UI
+    this.choicesTarget.appendChild(choiceEl);
+  }
+
+  onSubmit() {
+    const expirationTime = parseInt(this.expirationtimeTarget.value);
+
+    if (
+      !this.checkInputs(
+        this.titleTarget,
+        this.descriptionTarget,
+        this.expirationtimeTarget
+      )
+    ) {
+      return;
+    }
+    if (this.mixnetservers.length == 0) {
+      this.flash.printError(
+        `form validation failed: at least on mixnet server must be selected`
+      );
+      return;
+    }
+    if (this.choices.length < 2) {
+      this.flash.printError(
+        `form validation failed: at least two choices must be provided`
+      );
+      return;
+    }
+
+    const body = {
+      Title: this.titleTarget.value,
+      Description: this.descriptionTarget.value,
+      Expirationtime: expirationTime,
+      Mixnetservers: [this.mixnetserversTarget.value],
+      Choices: this.choices,
+    };
+
+    const url = this.peerInfo.getAPIURL("/peervote/elections");
+
+    this.post(url, body)
+      .then(() => {
+        this.electionsOutlet.update();
+        this.titleTarget.value = ""
+        this.descriptionTarget.value = ""
+        this.expirationtimeTarget.value = ""
+        location.reload()
+      })
+      .catch(function (res) {
+        console.log(res);
+      });
+  }
+}
+
 class Elections extends BaseElement {
   static get targets() {
     return ["elections"];
@@ -209,7 +360,7 @@ class Elections extends BaseElement {
 
   async update() {
     // generate this html serverside
-    const addr = this.peerInfo.getAPIURL("/peervote");
+    const addr = this.peerInfo.getAPIURL("/peervote/elections/html");
 
     try {
       const resp = await this.fetch(addr);
@@ -241,25 +392,15 @@ class Vote extends BaseElement {
       ChoiceID: this.choiceID,
       ElectionID: this.electionID,
     };
+    const addr = this.peerInfo.getAPIURL("/peervote/vote");
 
-    const fetchArgs = {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    };
-
-    try {
-      const addr = this.peerInfo.getAPIURL("/peervote/elections/vote");
-      await this.fetch(addr, fetchArgs);
-
-      this.electionsOutlet.update();
-    } catch (e) {
-      this.flash.printError(
-        "failed to update elections, update manually: " + e
-      );
-    }
+    this.post(addr, body)
+      .then(() => {
+        this.electionsOutlet.update();
+      })
+      .catch((e) => {
+        this.flash.printError("Failed to post vote: " + e);
+      });
   }
 }
 

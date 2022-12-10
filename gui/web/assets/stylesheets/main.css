@@ -101,6 +101,30 @@ h3 {
     margin: 20px 0 10px 0;
 }
 
+h3:before {
+    content: "↓";
+    position: absolute;
+    right: 8px;
+    top: -2px;
+    color: #00ceb1;
+}
+
+h3.active {
+    color: #fff;
+    background-color: #00ceb1;
+    padding: 4px;
+}
+
+h3.active:before {
+    content: "↑";
+    color: #fff;
+    top: 2px;
+}
+
+h3.collapsible:hover:before {
+    color: #fff;
+}
+
 .collapsible {
     cursor: pointer;
 }
