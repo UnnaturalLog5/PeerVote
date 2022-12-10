@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	z "go.dedis.ch/cs438/internal/testing"
 	"go.dedis.ch/cs438/transport/channel"
+	"go.dedis.ch/cs438/transport/udp"
 )
 
 func GetWinner(results map[string]uint) string {
@@ -35,11 +36,10 @@ func Test_SimpleElection(t *testing.T) {
 	node1.AddPeer(node2.GetAddr())
 
 	choices := []string{"One choice", "a better choice"}
-	expirationTime := time.Now().Add(time.Second * 3)
 
 	mixnetServers := []string{node2.GetAddr()}
 
-	electionID, err := node1.StartElection("Election for Mayer", "El Cidad is looking for a new mayor", choices, mixnetServers, expirationTime)
+	electionID, err := node1.StartElection("Election for Mayer", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*3)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
@@ -95,10 +95,9 @@ func Test_ElectionExpired(t *testing.T) {
 	node1.AddPeer(node2.GetAddr())
 
 	choices := []string{"One choice", "a better choice"}
-	expirationTime := time.Now().Add(time.Second * 1)
 
 	mixnetServers := []string{node2.GetAddr()}
-	electionID, err := node1.StartElection("Election for Mayer", "El Cidad is looking for a new mayor", choices, mixnetServers, expirationTime)
+	electionID, err := node1.StartElection("Election for Mayer", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second * 2)
@@ -131,4 +130,13 @@ func Test_ElectionExpired(t *testing.T) {
 
 	votes := node.GetElections()[0].Votes
 	require.Len(t, votes, 0)
+}
+
+func Test_StartNode(t *testing.T) {
+	transp := udp.NewUDP()
+
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+	defer node1.Stop()
+
+	time.Sleep(time.Hour)
 }

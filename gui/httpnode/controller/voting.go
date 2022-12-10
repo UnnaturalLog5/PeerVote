@@ -46,7 +46,12 @@ type electionView struct {
 	// use this over the one in Base, as this one is nicely formatted
 	Expiration string
 	MyVote     string
-	Results    map[string]uint
+	Results    []resultView
+}
+
+type resultView struct {
+	Name  string
+	Count uint
 }
 
 func (v voting) electionsHTMLGet(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +69,20 @@ func (v voting) electionsHTMLGet(w http.ResponseWriter, r *http.Request) {
 			Base:       election.Base,
 			Expiration: election.Base.Expiration.Format(time.ANSIC),
 			MyVote:     election.MyVote,
+		}
+
+		if len(election.Results) > 0 {
+			resultViews := []resultView{}
+			for _, choice := range election.Base.Choices {
+				resultView := resultView{
+					Name:  choice.Name,
+					Count: election.Results[choice.ChoiceID],
+				}
+
+				resultViews = append(resultViews, resultView)
+			}
+
+			electionV.Results = resultViews
 		}
 
 		electionViews = append(electionViews, electionV)
@@ -147,6 +166,10 @@ type startElectionArgument struct {
 func (v voting) electionsGet(w http.ResponseWriter, r *http.Request) {
 	elections := v.node.GetElections()
 
+	sort.SliceStable(elections, func(i, j int) bool {
+		return elections[i].Base.ElectionID > elections[j].Base.ElectionID
+	})
+
 	res, err := json.Marshal(elections)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed marshal elections response: %v", err),
@@ -176,7 +199,7 @@ func (v voting) electionsPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expirationTime := time.Now().Add(time.Duration(res.ExpirationTime))
+	expirationTime := time.Second * time.Duration(res.ExpirationTime)
 
 	_, err = v.node.StartElection(res.Title, res.Description, res.Choices, res.MixnetServers, expirationTime)
 	if err != nil {

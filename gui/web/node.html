@@ -25,16 +25,19 @@
 
     <div class="elections" data-controller="elections">
       <h2 class="collapsible">Elections</h2>
-      <div></div>
 
-      <div>
-        <h3 class="collapsible">+ Start New Election</h3>
+      <div
+        data-controller="startelection"
+        data-startelection-elections-outlet=".elections"
+      >
+        <h3
+          class="collapsible"
+          data-action="click->startelection#updateMixnetServerSelection"
+        >
+          + Start New Election
+        </h3>
         <div>
-          <div
-            class="startelectionform"
-            data-controller="startelection"
-            data-startelection-elections-outlet=".elections"
-          >
+          <div class="startelectionform grid">
             <span>Title</span>
             <input
               data-startelection-target="title"
@@ -87,8 +90,10 @@
               </div>
               <div data-startelection-target="choices"></div>
             </div>
-
-            <button data-action="click->startelection#onSubmit">
+            <button
+              data-action="click->startelection#onSubmit"
+              class="full-grid-width"
+            >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="24"
@@ -104,7 +109,7 @@
           </div>
         </div>
 
-        <div data-elections-target="elections"></div>
+        <div data-elections-target="elections" class="election-list"></div>
       </div>
     </div>
 
@@ -531,7 +536,11 @@
       </div>
     </div>
 
-    <div data-controller="packets" class="packets-holder">
+    <div
+      data-controller="packets"
+      class="packets-holder"
+      data-packets-elections-outlet=".elections"
+    >
       <h2 class="active collapsible">Packets history</h2>
 
       <div class="checkbox">

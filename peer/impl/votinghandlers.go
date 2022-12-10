@@ -42,6 +42,8 @@ func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet)
 			// n.MixAndForward()
 
 			// for now just start tallying
+
+			log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting tallying")
 			n.Tally(election.Base.ElectionID)
 		}()
 	}

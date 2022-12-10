@@ -226,8 +226,7 @@ class StartElection extends BaseElement {
   choices = [];
   mixnetservers = [];
 
-  async initialize() {
-    this.availablemixnetservers = await this.getMixnetServers();
+  initialize() {
     this.updateMixnetServerSelection();
   }
 
@@ -237,7 +236,7 @@ class StartElection extends BaseElement {
     try {
       const resp = await this.fetch(addr);
 
-      this.flash.printSuccess("MixnetServers updated");
+      // this.flash.printSuccess("MixnetServers updated");
 
       return await resp.json();
     } catch (e) {
@@ -246,7 +245,11 @@ class StartElection extends BaseElement {
     }
   }
 
-  updateMixnetServerSelection() {
+  async updateMixnetServerSelection() {
+    this.availablemixnetservers = await this.getMixnetServers();
+
+    this.mixnetserversselectTarget.innerHTML = "";
+
     this.availablemixnetservers.forEach((mixnetserver) => {
       const optionEl = document.createElement("option");
       optionEl.value = mixnetserver;
@@ -269,6 +272,8 @@ class StartElection extends BaseElement {
     el.innerText = `${idx}. ${mixnetserver}`;
 
     this.mixnetserversTarget.appendChild(el);
+
+    this.mixnetserversselectTarget.focus();
   }
 
   onAddChoice() {
@@ -298,6 +303,8 @@ class StartElection extends BaseElement {
 
     // and in UI
     this.choicesTarget.appendChild(choiceEl);
+
+    this.choiceinputTarget.focus();
   }
 
   onSubmit() {
@@ -329,7 +336,7 @@ class StartElection extends BaseElement {
       Title: this.titleTarget.value,
       Description: this.descriptionTarget.value,
       Expirationtime: expirationTime,
-      Mixnetservers: [this.mixnetserversTarget.value],
+      Mixnetservers: this.mixnetservers,
       Choices: this.choices,
     };
 
@@ -338,10 +345,11 @@ class StartElection extends BaseElement {
     this.post(url, body)
       .then(() => {
         this.electionsOutlet.update();
-        this.titleTarget.value = ""
-        this.descriptionTarget.value = ""
-        this.expirationtimeTarget.value = ""
-        location.reload()
+        this.titleTarget.value = "";
+        this.descriptionTarget.value = "";
+        this.expirationtimeTarget.value = "";
+        this.mixnetserversTarget.innerHTML = "";
+        this.choicesTarget.innerHTML = "";
       })
       .catch(function (res) {
         console.log(res);
@@ -382,12 +390,19 @@ class Vote extends BaseElement {
 
   static outlets = ["elections"];
 
+  choiceID = "";
+
   onToggle(event) {
     this.choiceID = event.params.choiceid;
     this.electionID = event.params.electionid;
   }
 
   async onSubmit() {
+    if (this.choiceID == "") {
+      this.flash.printError("Need to select an option to vote");
+      return;
+    }
+
     const body = {
       ChoiceID: this.choiceID,
       ElectionID: this.electionID,
@@ -597,6 +612,8 @@ class Packets extends BaseElement {
     return ["follow", "holder", "scroll", "packets"];
   }
 
+  static outlets = ["elections"];
+
   initialize() {
     const addr = this.peerInfo.getAPIURL("/registry/pktnotify");
     const newPackets = new EventSource(addr);
@@ -609,6 +626,13 @@ class Packets extends BaseElement {
 
   packetMessage(e) {
     const pkt = JSON.parse(e.data);
+
+    const type = pkt.Msg.Type;
+
+    if (type == "startelection" || type == "result") {
+      this.electionsOutlet.update();
+    }
+
     if (pkt.Msg.Type == "chat") {
       const date = new Date(pkt.Header.Timestamp / 1000000);
 

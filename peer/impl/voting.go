@@ -9,7 +9,7 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-func (n *node) StartElection(title, description string, choices, mixnetServers []string, expirationTime time.Time) (string, error) {
+func (n *node) StartElection(title, description string, choices, mixnetServers []string, electionDuration time.Duration) (string, error) {
 	// generate election id
 	electionChoices := []types.Choice{}
 	for _, choice := range choices {
@@ -18,6 +18,8 @@ func (n *node) StartElection(title, description string, choices, mixnetServers [
 			Name:     choice,
 		})
 	}
+
+	expirationTime := time.Now().Add(electionDuration)
 
 	electionID := xid.New().String()
 	startElectionMessage := types.StartElectionMessage{
@@ -103,9 +105,18 @@ func (n *node) Vote(electionID string, choiceID string) error {
 func (n *node) Tally(electionID string) {
 	election := n.electionStore.Get(electionID)
 
+	// we want 0 to show up as a count as well
+	// inefficient, but doesn't matter
 	results := map[string]uint{}
-	for _, vote := range election.Votes {
-		results[vote] += 1
+	for _, choice := range election.Base.Choices {
+		count := uint(0)
+		for _, vote := range election.Votes {
+			if vote == choice.ChoiceID {
+				count++
+			}
+		}
+
+		results[choice.ChoiceID] = count
 	}
 
 	resultMessage := types.ResultMessage{

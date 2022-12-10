@@ -1,16 +1,13 @@
 div.elections {
-  padding: 10px 10px 10px 10px;
-  max-width: 500px;
-  margin: auto;
-  max-height: 600px;
-  overflow-y: auto;
+    padding: 10px 10px 10px 10px;
+    max-width: 500px;
+    margin: auto;
+    max-height: 600px;
+    overflow-y: auto;
 }
 
 div.startelectionform {
     padding: 20px 0 0 0;
-    display: grid;
-    grid-gap: 8px;
-    grid-template-columns: 1fr 2fr;
 }
 
 div.startelectionform textarea:focus, div.startelectionform input:focus{
@@ -52,17 +49,12 @@ div.startelectionform input, div.startelectionform select {
     border-color: transparent transparent #eee #eee;
 }
 
-div.startelectionform button {
-    padding: 3px 10px;
-
-    border: 2px solid #eee;
-    border-radius: 0 0 20px 0;
-    border: none;
-
-    cursor: pointer;
+div.elections div.grid {
+    display: grid;
+    grid-gap: 8px;
+    grid-template-columns: 1fr 2fr;
 }
 
-div.startelectionform button:hover {
-    background: rgb(6,137,243);
-    color: #fff;
+div.elections .full-grid-width {
+    grid-column: 1 / -1;
 }

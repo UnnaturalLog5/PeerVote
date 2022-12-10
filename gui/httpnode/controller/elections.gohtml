@@ -1,63 +1,71 @@
 {{ define "votesResults" }}
-    {{ range $choice, $votes := .Results }}
-        <div>{{ $choice }}: {{ $votes }}</div>
+<div class="grid">
+    <div>Choice</div><div>Result</div>
+    {{ range $result := .Results }}
+    <div>{{ $result.Name }}:</div>
+    <div>{{ $result.Count }}</div>
     {{ end }}
+</div>
 {{ end }}
 
 {{ define "votesVoted" }}
-    {{ $election := . }}
-    {{ range $choice := .Base.Choices }}
-    <div class="row choice">
-        {{ if eq $election.MyVote $choice.ChoiceID }}
-        <span>(x)</span>
-        {{ end }}
-        {{ $choice.Name }}
-    </div>
-    {{ end }}
-    <div class="row"><span>You already voted!</span></div>
+{{ $election := . }}
+{{ range $choice := .Base.Choices }}
+<div class="choice">
+    <input type="radio" name="vote-{{$election.Base.ElectionID}}" data-action="click->vote#onToggle" {{ if eq
+        $election.MyVote $choice.ChoiceID }} checked="yes" {{ end }} disabled="true">
+    </input>
+    <span class="name">{{ $choice.Name }}</span>
+</div>
+{{ end }}
+<button disabled="true" class="disabled">
+    Already voted
+</button>
 {{ end }}
 
 {{ define "votesNotVoted" }}
-    {{ $electionID := .Base.ElectionID }}
-    <div data-controller="vote" data-vote-elections-outlet=".elections" class="choices">
-        {{ range $choice := .Base.Choices }}
-        <div class="choice">
-            <input
-                type="radio"
-                name="vote"
-                data-action="click->vote#onToggle"
-                data-vote-choiceid-param="{{ $choice.ChoiceID }}"
-                data-vote-electionid-param="{{ $electionID }}"
-            >
-            </input>
-            <span class="name">{{ $choice.Name }}</span>
-        </div>
-        {{ end }}
-        <button 
-            data-action="click->vote#onSubmit"
-            data-vote-electionid-param="{{ .Base.ElectionID }}"
-        >
-            Submit
-        </button>
+{{ $electionID := .Base.ElectionID }}
+<div data-controller="vote" data-vote-elections-outlet=".elections" class="choices">
+    {{ range $choice := .Base.Choices }}
+    <div class="choice">
+        <input type="radio" name="vote-{{$electionID}}" data-action="click->vote#onToggle"
+            data-vote-choiceid-param="{{ $choice.ChoiceID }}" data-vote-electionid-param="{{ $electionID }}">
+        </input>
+        <span class="name">{{ $choice.Name }}</span>
     </div>
+    {{ end }}
+    <button data-action="click->vote#onSubmit" data-vote-electionid-param="{{ .Base.ElectionID }}">
+        Submit
+    </button>
+</div>
 {{ end }}
 
 {{ range $election := .Elections }}
-    <div class="election">
-        <div><h3 class="title">{{ $election.Base.Title }}</h3></div>
+<div>
+    <div>
+        <h3 class="title">{{ $election.Base.Title }}</h3>
+    </div>
+    <div class="grid">
+        <div><span>Description</span></div>
         <div><span class="desc">{{ $election.Base.Description }}</span></div>
-        <div><span>Open until</span><span class="expiration">{{ $election.Expiration }}</span></div>
+
+
+        <div><span>Open until</span></div>
+        <div><span class="expiration">{{ $election.Expiration }}</span></div>
 
         <div><span>Choices</span></div>
-
-        {{ if $election.Results }}
+        <div>
+            {{ if $election.Results }}
             {{ template "votesResults" $election }}
-        {{ else if $election.MyVote }}
+            {{ else if $election.MyVote }}
             {{ template "votesVoted" $election }}
-        {{ else }}
+            {{ else }}
             {{ template "votesNotVoted" $election }}
-        {{ end }}
+            {{ end }}
+        </div>
     </div>
+</div>
+</div>
 {{ else }}
-    <i>No Elections to show</i>
+<h3>No Elections to show</h3>
 {{ end }}

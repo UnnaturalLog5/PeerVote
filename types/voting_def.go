@@ -13,8 +13,9 @@ type ElectionBase struct {
 }
 
 type Election struct {
-	Base    ElectionBase
-	MyVote  string
+	Base   ElectionBase
+	MyVote string
+	// choiceID -> count
 	Results map[string]uint
 	Votes   []string
 }
