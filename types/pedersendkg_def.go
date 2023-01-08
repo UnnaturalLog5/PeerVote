@@ -27,3 +27,8 @@ var DefaultPedersenSuite = PedersenSuite{
 	Q: big.Int{},
 	T: 5,
 }
+
+type DKGShareMessage struct {
+	Share big.Int
+	X     []big.Int
+}

@@ -2,6 +2,8 @@ package impl
 
 import (
 	"crypto/rand"
+	"github.com/rs/zerolog/log"
+	"go.dedis.ch/cs438/types"
 	"math/big"
 	"regexp"
 	"strconv"
@@ -20,6 +22,7 @@ func (n *node) PedersenDkg(mixnetServers []string) {
 	a := n.GenerateRandomPolynomial()
 	X := make([]big.Int, n.conf.PedersenSuite.T+1)
 	for i := 0; i < len(a); i++ {
+		// X[i] = g^a[i]
 		X[i].Exp(&n.conf.PedersenSuite.G, &a[i], &n.conf.PedersenSuite.P)
 	}
 	f := func(id int) big.Int {
@@ -39,22 +42,36 @@ func (n *node) PedersenDkg(mixnetServers []string) {
 	}
 }
 
+// sendDKGShareMessage creates a new types.DKGShareMessage, wraps it inside a
+// types.PrivateMessage and sends it secretely to mixnetServer
 func (n *node) sendDKGShareMessage(mixnetServer string, share big.Int, X []big.Int) {
-	// todo
-	/*
-		log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKG Share Message")
 
-		dkgShareMessage := types.DKGShareMessage{}
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKG Share Message")
 
-		msg, err := marshalMessage(dkgShareMessage)
-		if err != nil {
-			return
-		}
+	recipients := map[string]struct{}{
+		mixnetServer: {},
+	}
 
-		err = n.Broadcast(msg)
-		if err != nil {
-			return
-		}*/
+	dkgShareMessage := types.DKGShareMessage{
+		Share: share,
+		X:     X,
+	}
+	dkgShareTransportMessage, err := marshalMessage(dkgShareMessage)
+
+	privateMessage := types.PrivateMessage{
+		Recipients: recipients,
+		Msg:        &dkgShareTransportMessage,
+	}
+
+	msg, err := marshalMessage(privateMessage)
+	if err != nil {
+		return
+	}
+
+	err = n.Broadcast(msg)
+	if err != nil {
+		return
+	}
 }
 
 // GenerateRandomPolynomial generates random polynomial of degree t
