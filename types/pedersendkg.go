@@ -16,7 +16,7 @@ func (m DKGShareMessage) Name() string {
 
 // String implements types.Message.
 func (m DKGShareMessage) String() string {
-	return fmt.Sprintf("<%s> - DKG-share: %s", m.share, m.X)
+	return fmt.Sprintf("<%s> - DKG-share: %s", m.Share, m.X)
 }
 
 // HTML implements types.Message.

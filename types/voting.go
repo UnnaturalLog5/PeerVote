@@ -26,7 +26,7 @@ func (m StartElectionMessage) HTML() string {
 
 // NewEmpty implements types.Message.
 func (m VoteMessage) NewEmpty() Message {
-	return &StartElectionMessage{}
+	return &VoteMessage{}
 }
 
 // Name implements types.Message.
@@ -48,7 +48,7 @@ func (m VoteMessage) HTML() string {
 
 // NewEmpty implements types.Message.
 func (m ResultMessage) NewEmpty() Message {
-	return &StartElectionMessage{}
+	return &ResultMessage{}
 }
 
 // Name implements types.Message.
