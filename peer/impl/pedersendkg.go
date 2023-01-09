@@ -134,6 +134,8 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 	//}
 }
 
+// VerifyEquation verifies if the received share is valid as a part of the second step
+// of the Pedersen DKG protocol.
 func (n *node) VerifyEquation(myMixnetID big.Int, share *big.Int, X []big.Int) bool {
 	shareVal := new(big.Int).Exp(&n.conf.PedersenSuite.G, share, &n.conf.PedersenSuite.P)
 	productVal := new(big.Int).SetInt64(1)
