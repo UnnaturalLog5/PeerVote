@@ -25,7 +25,7 @@ type Choice struct {
 	Name     string
 }
 
-type StartElectionMessage struct {
+type AnnounceElectionMessage struct {
 	Base ElectionBase
 }
 

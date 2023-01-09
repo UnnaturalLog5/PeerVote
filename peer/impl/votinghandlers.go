@@ -10,10 +10,10 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling StartElectionMessage from %v", pkt.Header.Source)
+func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling AnnounceElectionMessage from %v", pkt.Header.Source)
 
-	startElectionMessage := types.StartElectionMessage{}
+	startElectionMessage := types.AnnounceElectionMessage{}
 	err := json.Unmarshal(pkt.Msg.Payload, &startElectionMessage)
 	if err != nil {
 		return err
@@ -28,6 +28,11 @@ func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet)
 	}
 
 	n.electionStore.Set(election.Base.ElectionID, election)
+
+	//
+	if contains(election.Base.MixnetServers, n.myAddr) {
+		n.PedersenDkg(election.Base.MixnetServers)
+	}
 
 	// TODO
 	// if i am the first mixnet server, set timer for expiration to start with mixing

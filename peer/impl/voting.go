@@ -22,7 +22,7 @@ func (n *node) StartElection(title, description string, choices, mixnetServers [
 	expirationTime := time.Now().Add(electionDuration)
 
 	electionID := xid.New().String()
-	startElectionMessage := types.StartElectionMessage{
+	startElectionMessage := types.AnnounceElectionMessage{
 		Base: types.ElectionBase{
 			ElectionID:    electionID,
 			Initiator:     n.myAddr,
@@ -34,7 +34,7 @@ func (n *node) StartElection(title, description string, choices, mixnetServers [
 		},
 	}
 
-	err := n.sendStartElectionMessage(startElectionMessage)
+	err := n.sendAnnounceElectionMessage(startElectionMessage)
 	if err != nil {
 		return "", err
 	}

@@ -3,22 +3,22 @@ package types
 import "fmt"
 
 // NewEmpty implements types.Message.
-func (m StartElectionMessage) NewEmpty() Message {
-	return &StartElectionMessage{}
+func (m AnnounceElectionMessage) NewEmpty() Message {
+	return &AnnounceElectionMessage{}
 }
 
 // Name implements types.Message.
-func (m StartElectionMessage) Name() string {
+func (m AnnounceElectionMessage) Name() string {
 	return "startelection"
 }
 
 // String implements types.Message.
-func (m StartElectionMessage) String() string {
+func (m AnnounceElectionMessage) String() string {
 	return fmt.Sprintf("<%s> - Election: %s", m.Base.ElectionID, m.Base.Description)
 }
 
 // HTML implements types.Message.
-func (m StartElectionMessage) HTML() string {
+func (m AnnounceElectionMessage) HTML() string {
 	return m.String()
 }
 

@@ -119,7 +119,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.PaxosAcceptMessage{}, peer.HandlePaxosAcceptMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.TLCMessage{}, peer.HandleTLCMessage)
 
-	peer.conf.MessageRegistry.RegisterMessageCallback(types.StartElectionMessage{}, peer.HandleStartElectionMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.AnnounceElectionMessage{}, peer.HandleAnnounceElectionMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.VoteMessage{}, peer.HandleVoteMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.ResultMessage{}, peer.HandleResultMessage)
 

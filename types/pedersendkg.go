@@ -6,7 +6,7 @@ import "fmt"
 
 // NewEmpty implements types.Message.
 func (m DKGShareMessage) NewEmpty() Message {
-	return &StartElectionMessage{}
+	return &AnnounceElectionMessage{}
 }
 
 // Name implements types.Message.
