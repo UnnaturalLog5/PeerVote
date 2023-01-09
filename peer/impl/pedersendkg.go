@@ -43,7 +43,7 @@ func (n *node) PedersenDkg(electionID string, mixnetServers []string) {
 }
 
 // sendDKGShareMessage creates a new types.DKGShareMessage, wraps it inside a
-// types.PrivateMessage and sends it secretely to mixnetServer
+// types.PrivateMessage and sends it secretly to mixnetServer
 func (n *node) sendDKGShareMessage(electionID string, mixnetServer string, mixnetServerID int, share big.Int, X []big.Int) {
 
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKG Share Message")
@@ -124,23 +124,55 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 		ComplainedCnt: 0,
 	}
 
-	myMixnetID := n.GetMyMixnetServerID(election.Base.MixnetServers)
-	isValid := n.VerifyEquation(myMixnetID, &dkgMessage.Share, &dkgMessage.X)
-	//
-	//if !isValid {
-	//	send compliant
-	//} else {
-	//	idk
-	//}
+	myMixnetID := big.NewInt(int64(n.GetMyMixnetServerID(election.Base.MixnetServers)))
+	isValid := n.VerifyEquation(myMixnetID, &dkgMessage.Share, dkgMessage.X)
+
+	n.sendDKGShareValidationMessage(dkgMessage.ElectionID, election.Base.MixnetServers, dkgMessage.MixnetServerID, isValid)
+
+	return nil
+}
+
+// sendDKGShareValidationMessage creates a new types.DKGShareValidationMessage, wraps it inside a
+// types.PrivateMessage and sends it secretly to other mixnet servers
+func (n *node) sendDKGShareValidationMessage(electionID string, mixnetServers []string, mixnetServerID int, isShareValid bool) {
+
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKG Share Validition Message")
+
+	recipients := make(map[string]struct{})
+	for _, mixnetServer := range mixnetServers {
+		recipients[mixnetServer] = struct{}{}
+	}
+
+	dkgShareValidationMessage := types.DKGShareValiditionMessage{
+		ElectionID:     electionID,
+		MixnetServerID: mixnetServerID,
+		IsShareValid:   isShareValid,
+	}
+	dkgShareValidationTransportMessage, err := marshalMessage(&dkgShareValidationMessage)
+
+	privateMessage := types.PrivateMessage{
+		Recipients: recipients,
+		Msg:        &dkgShareValidationTransportMessage,
+	}
+
+	msg, err := marshalMessage(privateMessage)
+	if err != nil {
+		return
+	}
+
+	err = n.Broadcast(msg)
+	if err != nil {
+		return
+	}
 }
 
 // VerifyEquation verifies if the received share is valid as a part of the second step
 // of the Pedersen DKG protocol.
-func (n *node) VerifyEquation(myMixnetID big.Int, share *big.Int, X []big.Int) bool {
+func (n *node) VerifyEquation(myMixnetID *big.Int, share *big.Int, X []big.Int) bool {
 	shareVal := new(big.Int).Exp(&n.conf.PedersenSuite.G, share, &n.conf.PedersenSuite.P)
 	productVal := new(big.Int).SetInt64(1)
 	for k := 0; k <= n.conf.PedersenSuite.T; k++ {
-		exp := new(big.Int).Exp(&myMixnetID, big.NewInt(int64(k)), nil)
+		exp := new(big.Int).Exp(myMixnetID, big.NewInt(int64(k)), nil)
 		factor := new(big.Int).Exp(&X[k], exp, &n.conf.PedersenSuite.P)
 		productVal.Mul(productVal, factor)
 		productVal.Mod(productVal, &n.conf.PedersenSuite.P)
