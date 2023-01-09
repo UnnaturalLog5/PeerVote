@@ -29,6 +29,8 @@ var DefaultPedersenSuite = PedersenSuite{
 }
 
 type DKGShareMessage struct {
-	Share big.Int
-	X     []big.Int
+	ElectionID     string
+	MixnetServerID int
+	Share          big.Int
+	X              []big.Int
 }

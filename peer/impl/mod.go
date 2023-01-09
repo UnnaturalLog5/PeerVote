@@ -123,6 +123,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.VoteMessage{}, peer.HandleVoteMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.ResultMessage{}, peer.HandleResultMessage)
 
+	// Pedersen DKG
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.DKGShareMessage{}, peer.HandleDKGShareMessage)
+
 	return &peer
 }
 

@@ -2,11 +2,11 @@ package impl
 
 import (
 	"crypto/rand"
+	"fmt"
 	"github.com/rs/zerolog/log"
+	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"math/big"
-	"regexp"
-	"strconv"
 )
 
 // PedersenDkg implements Pedersen’s Distributed Key Generation Protocol
@@ -16,7 +16,7 @@ import (
 // Threshold Cryptography, Secure Applications of Pedersen’s Distributed
 // Key Generation Protocol (Rosario Gennaro, Stanislaw Jarecki,
 // Hugo Krawczyk, and Tal Rabin)
-func (n *node) PedersenDkg(mixnetServers []string) {
+func (n *node) PedersenDkg(electionID string, mixnetServers []string) {
 	// Choose a random polynomial f(z) over Zq of degree t:
 	// f(z) = a0 + a1*z + ... + at*z^t
 	a := n.GenerateRandomPolynomial()
@@ -34,17 +34,17 @@ func (n *node) PedersenDkg(mixnetServers []string) {
 		return sum
 	}
 
-	// Compute the share for each mixnetServer
-	for _, mixnetServer := range mixnetServers {
-		id := GetId(mixnetServer)
-		share := f(id)
-		n.sendDKGShareMessage(mixnetServer, share, X)
+	// Compute the share xij and send it to each mixnetServer
+	for i := 0; i < len(mixnetServers); i++ {
+		share := f(i + 1)
+		n.sendDKGShareMessage(electionID, mixnetServers[i], i, share, X)
 	}
+
 }
 
 // sendDKGShareMessage creates a new types.DKGShareMessage, wraps it inside a
 // types.PrivateMessage and sends it secretely to mixnetServer
-func (n *node) sendDKGShareMessage(mixnetServer string, share big.Int, X []big.Int) {
+func (n *node) sendDKGShareMessage(electionID string, mixnetServer string, mixnetServerID int, share big.Int, X []big.Int) {
 
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKG Share Message")
 
@@ -53,8 +53,10 @@ func (n *node) sendDKGShareMessage(mixnetServer string, share big.Int, X []big.I
 	}
 
 	dkgShareMessage := types.DKGShareMessage{
-		Share: share,
-		X:     X,
+		ElectionID:     electionID,
+		MixnetServerID: mixnetServerID,
+		Share:          share,
+		X:              X,
 	}
 	dkgShareTransportMessage, err := marshalMessage(dkgShareMessage)
 
@@ -92,11 +94,65 @@ func (n *node) GenerateRandomBigInt() *big.Int {
 	return a
 }
 
-// GetId returns the ID of the mixnet server. In this case,
-// the port number of the server's address is used.
-func GetId(serverAddr string) int {
-	r := regexp.MustCompile(`.*:(\d+)`)
-	m := r.FindStringSubmatch(serverAddr)
-	i, _ := strconv.Atoi(m[1])
-	return i
+// HandleDKGShareMessage handles types.DKGShareMessage
+func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) error {
+	// cast the message to its actual type. You assume it is the right type.
+	dkgMessage, ok := msg.(*types.DKGShareMessage)
+	if !ok {
+		return fmt.Errorf("wrong type: %T", msg)
+	}
+
+	// Processing DKGShareMessage
+
+	election := n.electionStore.Get(dkgMessage.ElectionID)
+	// todo what if node hasn't received ElectionAnnounceMessage yet?
+	// add some kind of synchronization
+
+	mixnetServers := election.Base.MixnetServers
+
+	if !contains(mixnetServers, n.myAddr) {
+		return fmt.Errorf("node received DKGShareMessage for electionID %s,"+
+			" but the node is not one of the mixnetServers", dkgMessage.ElectionID)
+	}
+
+	// store info about mixnetserver
+	// todo what if I already received a Complaint message for example?
+	election.Base.MixnetServerInfos[dkgMessage.MixnetServerID] = types.MixnetServerInfo{
+		ReceivedShare: dkgMessage.Share,
+		X:             dkgMessage.X,
+		VerifiedCnt:   0,
+		ComplainedCnt: 0,
+	}
+
+	myMixnetID := n.GetMyMixnetServerID(election.Base.MixnetServers)
+	isValid := n.VerifyEquation(myMixnetID, &dkgMessage.Share, &dkgMessage.X)
+	//
+	//if !isValid {
+	//	send compliant
+	//} else {
+	//	idk
+	//}
+}
+
+func (n *node) VerifyEquation(myMixnetID big.Int, share *big.Int, X []big.Int) bool {
+	shareVal := new(big.Int).Exp(&n.conf.PedersenSuite.G, share, &n.conf.PedersenSuite.P)
+	productVal := new(big.Int).SetInt64(1)
+	for k := 0; k <= n.conf.PedersenSuite.T; k++ {
+		exp := new(big.Int).Exp(&myMixnetID, big.NewInt(int64(k)), nil)
+		factor := new(big.Int).Exp(&X[k], exp, &n.conf.PedersenSuite.P)
+		productVal.Mul(productVal, factor)
+		productVal.Mod(productVal, &n.conf.PedersenSuite.P)
+	}
+
+	return shareVal.Cmp(productVal) == 0
+}
+
+// GetMyMixnetServerID returns the ID of the node within mixnet servers
+func (n *node) GetMyMixnetServerID(mixnetServers []string) int {
+	for i, addr := range mixnetServers {
+		if addr == n.myAddr {
+			return i + 1
+		}
+	}
+	return -1
 }

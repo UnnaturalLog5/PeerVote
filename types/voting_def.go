@@ -1,15 +1,19 @@
 package types
 
-import "time"
+import (
+	"math/big"
+	"time"
+)
 
 type ElectionBase struct {
-	ElectionID    string
-	Initiator     string
-	Title         string
-	Description   string
-	Choices       []Choice
-	Expiration    time.Time
-	MixnetServers []string
+	ElectionID        string
+	Initiator         string
+	Title             string
+	Description       string
+	Choices           []Choice
+	Expiration        time.Time
+	MixnetServers     []string
+	MixnetServerInfos []MixnetServerInfo
 }
 
 type Election struct {
@@ -45,4 +49,13 @@ type ResultMessage struct {
 	ElectionID string
 	Results    map[string]uint
 	// Proof
+}
+
+// MixnetServerInfo contains the data about mixnet server which plays the role
+// in Pedersen DKG protocol
+type MixnetServerInfo struct {
+	ReceivedShare big.Int
+	X             []big.Int
+	VerifiedCnt   int
+	ComplainedCnt int
 }
