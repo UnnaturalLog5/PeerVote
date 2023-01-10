@@ -358,6 +358,16 @@ func (n *node) VerifyEquation(j *big.Int, share *big.Int, X []big.Int) bool {
 	return shareVal.Cmp(productVal) == 0
 }
 
+// ReconstructPublicKey reconstructs the public value of the distributed shared key
+func (n *node) ReconstructPublicKey(election types.Election) *big.Int {
+	productVal := new(big.Int).SetInt64(1)
+	for _, server := range election.Base.MixnetServerInfos {
+		productVal.Mul(productVal, &server.X[0])
+		productVal.Mod(productVal, &n.conf.PedersenSuite.P)
+	}
+	return productVal
+}
+
 // GetMyMixnetServerID returns the ID of the node within mixnet servers
 func (n *node) GetMyMixnetServerID(mixnetServers []string) int {
 	for i, addr := range mixnetServers {
