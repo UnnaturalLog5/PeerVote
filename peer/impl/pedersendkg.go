@@ -200,6 +200,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 		election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].ComplainedCnt++
 		if election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].ComplainedCnt > n.conf.PedersenSuite.T {
 			election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
+			election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].X[0] = *big.NewInt(1)
 			if n.ShouldSendElectionReadyMessage(election) {
 				n.sendElectionReadyMessage(election)
 			}
@@ -279,6 +280,7 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 
 		if !isValid {
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
+			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0] = *big.NewInt(1)
 			if n.ShouldSendElectionReadyMessage(election) {
 				n.sendElectionReadyMessage(election)
 			}
