@@ -69,3 +69,24 @@ func (m ElectionReadyMessage) String() string {
 func (m ElectionReadyMessage) HTML() string {
 	return m.String()
 }
+
+// NewEmpty implements types.Message.
+func (m DKGRevealShareMessage) NewEmpty() Message {
+	return &AnnounceElectionMessage{}
+}
+
+// Name implements types.Message.
+func (m DKGRevealShareMessage) Name() string {
+	return "dkg-reveal-share"
+}
+
+// String implements types.Message.
+func (m DKGRevealShareMessage) String() string {
+	return fmt.Sprintf("DKGRevealShareMessage: electionID: %s;  mixnet server ID: %d; complaining server ID: %d",
+		m.ElectionID, m.MixnetServerID, m.ComplainingServerID)
+}
+
+// HTML implements types.Message.
+func (m DKGRevealShareMessage) HTML() string {
+	return m.String()
+}

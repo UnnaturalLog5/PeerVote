@@ -175,7 +175,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 		return fmt.Errorf("wrong type: %T", msg)
 	}
 
-	// Processing DKGShareMessage
+	// Processing DKGShareValidationMessage
 
 	election := n.electionStore.Get(dkgShareValidationMessage.ElectionID)
 	// todo what if node hasn't received ElectionAnnounceMessage yet?
@@ -190,7 +190,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 
 	if dkgShareValidationMessage.IsShareValid {
 		election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].VerifiedCnt++
-		if election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].VerifiedCnt == n.conf.PedersenSuite.T {
+		if election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].VerifiedCnt == len(election.Base.MixnetServers) {
 			election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].QualifiedStatus = types.QUALIFIED
 			if n.ShouldSendElectionReadyMessage(election) {
 				n.sendElectionReadyMessage(election)
@@ -202,6 +202,94 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 			election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
 			if n.ShouldSendElectionReadyMessage(election) {
 				n.sendElectionReadyMessage(election)
+			}
+		} else {
+			myMixnetServerID := n.GetMyMixnetServerID(election.Base.MixnetServers)
+			if myMixnetServerID == dkgShareValidationMessage.MixnetServerID {
+				n.sendDKGRevealShareMessage(election, myMixnetServerID, dkgShareValidationMessage.MixnetServerID)
+			}
+		}
+	}
+
+	return nil
+}
+
+// sendDKGRevealShareMessage broadcasts types.DKGRevealShareMessage to other mixnet servers
+func (n *node) sendDKGRevealShareMessage(election types.Election, myMixnetServerID int, complainingServerID int) {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending KGRevealShareMessage")
+
+	recipients := make(map[string]struct{})
+	for _, mixnetServer := range election.Base.MixnetServers {
+		recipients[mixnetServer] = struct{}{}
+	}
+
+	dkgRevealShareMessage := types.DKGRevealShareMessage{
+		ElectionID:          election.Base.ElectionID,
+		MixnetServerID:      myMixnetServerID,
+		ComplainingServerID: complainingServerID,
+	}
+
+	dkgRevealShareTransportMessage, err := marshalMessage(&dkgRevealShareMessage)
+	if err != nil {
+		return
+	}
+
+	privateMessage := types.PrivateMessage{
+		Recipients: recipients,
+		Msg:        &dkgRevealShareTransportMessage,
+	}
+
+	msg, err := marshalMessage(privateMessage)
+	if err != nil {
+		return
+	}
+
+	err = n.Broadcast(msg)
+	if err != nil {
+		return
+	}
+}
+
+// HandleDKGRevealShareMessage handles types.DKGRevealShareMessage
+func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Packet) error {
+	// cast the message to its actual type. You assume it is the right type.
+	dkgRevealShareMessage, ok := msg.(*types.DKGRevealShareMessage)
+	if !ok {
+		return fmt.Errorf("wrong type: %T", msg)
+	}
+
+	// Processing DKGRevealShareMessage
+	election := n.electionStore.Get(dkgRevealShareMessage.ElectionID)
+	// todo what if node hasn't received ElectionAnnounceMessage yet?
+	// add some kind of synchronization
+
+	mixnetServers := election.Base.MixnetServers
+
+	if !contains(mixnetServers, n.myAddr) {
+		return fmt.Errorf("node received DKGShareValidationMessage for electionID %s,"+
+			" but the node is not one of the mixnetServers", dkgRevealShareMessage.ElectionID)
+	}
+
+	if election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus == types.NOT_DECIDED_YET {
+
+		j := big.NewInt(int64(dkgRevealShareMessage.MixnetServerID))
+		share := dkgRevealShareMessage.Share
+		X := election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X
+		isValid := n.VerifyEquation(j, &share, X)
+
+		if !isValid {
+			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
+			if n.ShouldSendElectionReadyMessage(election) {
+				n.sendElectionReadyMessage(election)
+			}
+		} else {
+			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].VerifiedCnt++
+			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].ComplainedCnt--
+			if election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].VerifiedCnt == len(election.Base.MixnetServers) {
+				election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.QUALIFIED
+				if n.ShouldSendElectionReadyMessage(election) {
+					n.sendElectionReadyMessage(election)
+				}
 			}
 		}
 	}
@@ -220,7 +308,9 @@ func (n *node) sendElectionReadyMessage(election types.Election) {
 		QualifiedServers: qualifiedServers,
 	}
 	electionReadyTransportMessage, err := marshalMessage(&electionReadyMessage)
-
+	if err != nil {
+		return
+	}
 	err = n.Broadcast(electionReadyTransportMessage)
 	if err != nil {
 		return
@@ -253,11 +343,11 @@ func (n *node) ShouldSendElectionReadyMessage(election types.Election) bool {
 
 // VerifyEquation verifies if the received share is valid as a part of the second step
 // of the Pedersen DKG protocol.
-func (n *node) VerifyEquation(myMixnetID *big.Int, share *big.Int, X []big.Int) bool {
+func (n *node) VerifyEquation(j *big.Int, share *big.Int, X []big.Int) bool {
 	shareVal := new(big.Int).Exp(&n.conf.PedersenSuite.G, share, &n.conf.PedersenSuite.P)
 	productVal := new(big.Int).SetInt64(1)
 	for k := 0; k <= n.conf.PedersenSuite.T; k++ {
-		exp := new(big.Int).Exp(myMixnetID, big.NewInt(int64(k)), nil)
+		exp := new(big.Int).Exp(j, big.NewInt(int64(k)), nil)
 		factor := new(big.Int).Exp(&X[k], exp, &n.conf.PedersenSuite.P)
 		productVal.Mul(productVal, factor)
 		productVal.Mod(productVal, &n.conf.PedersenSuite.P)
@@ -275,5 +365,3 @@ func (n *node) GetMyMixnetServerID(mixnetServers []string) int {
 	}
 	return -1
 }
-
-// Todo CompliantMessage means you're disqualified

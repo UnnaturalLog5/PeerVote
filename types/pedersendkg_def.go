@@ -45,3 +45,10 @@ type ElectionReadyMessage struct {
 	ElectionID       string
 	QualifiedServers []string
 }
+
+type DKGRevealShareMessage struct {
+	ElectionID          string
+	Share               big.Int
+	MixnetServerID      int
+	ComplainingServerID int
+}
