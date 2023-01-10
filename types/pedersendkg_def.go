@@ -18,7 +18,7 @@ type PedersenSuite struct {
 	P big.Int
 	G big.Int
 	Q big.Int
-	T int
+	T int // Threshold
 }
 
 var DefaultPedersenSuite = PedersenSuite{

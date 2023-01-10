@@ -39,7 +39,24 @@ func (n *node) PedersenDkg(electionID string, mixnetServers []string) {
 		share := f(i + 1)
 		n.sendDKGShareMessage(electionID, mixnetServers[i], i, share, X)
 	}
+}
 
+// GenerateRandomPolynomial generates random polynomial of degree t
+// over group Zq. Returns a slice which contains the coefficients of
+// the corresponding polynomial.
+func (n *node) GenerateRandomPolynomial() []big.Int {
+	arr := make([]big.Int, n.conf.PedersenSuite.T+1)
+	for i := 0; i < n.conf.PedersenSuite.T+1; i++ {
+		arr[i] = *n.GenerateRandomBigInt()
+	}
+	return arr
+}
+
+// GenerateRandomBigInt generates a random value in Zq
+func (n *node) GenerateRandomBigInt() *big.Int {
+	//Generate cryptographically strong pseudo-random between 0 - max
+	a, _ := rand.Int(rand.Reader, &n.conf.PedersenSuite.Q)
+	return a
 }
 
 // sendDKGShareMessage creates a new types.DKGShareMessage, wraps it inside a
@@ -76,24 +93,6 @@ func (n *node) sendDKGShareMessage(electionID string, mixnetServer string, mixne
 	}
 }
 
-// GenerateRandomPolynomial generates random polynomial of degree t
-// over group Zq. Returns a slice which contains the coefficients of
-// the corresponding polynomial.
-func (n *node) GenerateRandomPolynomial() []big.Int {
-	arr := make([]big.Int, n.conf.PedersenSuite.T+1)
-	for i := 0; i < n.conf.PedersenSuite.T+1; i++ {
-		arr[i] = *n.GenerateRandomBigInt()
-	}
-	return arr
-}
-
-// GenerateRandomBigInt generates a random value in Zq
-func (n *node) GenerateRandomBigInt() *big.Int {
-	//Generate cryptographically strong pseudo-random between 0 - max
-	a, _ := rand.Int(rand.Reader, &n.conf.PedersenSuite.Q)
-	return a
-}
-
 // HandleDKGShareMessage handles types.DKGShareMessage
 func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) error {
 	// cast the message to its actual type. You assume it is the right type.
@@ -118,10 +117,11 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 	// store info about mixnetserver
 	// todo what if I already received a Complaint message for example?
 	election.Base.MixnetServerInfos[dkgMessage.MixnetServerID] = types.MixnetServerInfo{
-		ReceivedShare: dkgMessage.Share,
-		X:             dkgMessage.X,
-		VerifiedCnt:   0,
-		ComplainedCnt: 0,
+		ReceivedShare:   dkgMessage.Share,
+		X:               dkgMessage.X,
+		VerifiedCnt:     0,
+		ComplainedCnt:   0,
+		QualifiedStatus: types.NOT_DECIDED_YET,
 	}
 
 	myMixnetID := big.NewInt(int64(n.GetMyMixnetServerID(election.Base.MixnetServers)))
@@ -137,7 +137,7 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 // types.PrivateMessage and sends it secretly to other mixnet servers
 func (n *node) sendDKGShareValidationMessage(electionID string, mixnetServers []string, mixnetServerID int, isShareValid bool) {
 
-	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKG Share Validition Message")
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKG Share Validation Message")
 
 	recipients := make(map[string]struct{})
 	for _, mixnetServer := range mixnetServers {
@@ -190,12 +190,20 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 
 	if dkgShareValidationMessage.IsShareValid {
 		election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].VerifiedCnt++
+		if election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].VerifiedCnt == n.conf.PedersenSuite.T {
+			election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].QualifiedStatus = types.QUALIFIED
+			if n.ShouldSendElectionReadyMessage(election) {
+				n.sendElectionReadyMessage(election)
+			}
+		}
 	} else {
 		election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].ComplainedCnt++
-	}
-
-	if n.ShouldSendElectionReadyMessage(election) {
-		n.sendElectionReadyMessage(election)
+		if election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].ComplainedCnt > n.conf.PedersenSuite.T {
+			election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
+			if n.ShouldSendElectionReadyMessage(election) {
+				n.sendElectionReadyMessage(election)
+			}
+		}
 	}
 
 	return nil
@@ -224,7 +232,7 @@ func (n *node) sendElectionReadyMessage(election types.Election) {
 func (n *node) GetQualifiedMixnetServers(election types.Election) []string {
 	qualifiedServers := make([]string, 0)
 	for i := 0; i < len(election.Base.MixnetServers); i++ {
-		if election.Base.MixnetServerInfos[i].VerifiedCnt == len(election.Base.MixnetServers) {
+		if election.Base.MixnetServerInfos[i].QualifiedStatus == types.QUALIFIED {
 			qualifiedServers = append(qualifiedServers, election.Base.MixnetServers[i])
 		}
 	}
@@ -232,13 +240,11 @@ func (n *node) GetQualifiedMixnetServers(election types.Election) []string {
 }
 
 // ShouldSendElectionReadyMessage checks whether types.ElectionReadyMessage should be sent.
-// types.ElectionReadyMessage should be sent only when all n*n types.DKGShareValidationMessage
-// have arrived and if all of the mixnet servers have clear status (Qualified/Disqualified)
+// types.ElectionReadyMessage should be sent only if all the mixnet servers have a decided status
+// (types.QUALIFIED or types.DISQUALIFIED)
 func (n *node) ShouldSendElectionReadyMessage(election types.Election) bool {
-	serverCnt := len(election.Base.MixnetServers)
 	for _, mixnetServerInfo := range election.Base.MixnetServerInfos {
-		if mixnetServerInfo.VerifiedCnt+mixnetServerInfo.ComplainedCnt != serverCnt ||
-			(mixnetServerInfo.ComplainedCnt != 0 && mixnetServerInfo.ComplainedCnt < serverCnt/2) {
+		if mixnetServerInfo.QualifiedStatus == types.NOT_DECIDED_YET {
 			return false
 		}
 	}
@@ -269,3 +275,5 @@ func (n *node) GetMyMixnetServerID(mixnetServers []string) int {
 	}
 	return -1
 }
+
+// Todo CompliantMessage means you're disqualified

@@ -51,11 +51,19 @@ type ResultMessage struct {
 	// Proof
 }
 
+// Mixnet qualification status
+const (
+	NOT_DECIDED_YET = iota
+	QUALIFIED
+	DISQUALIFIED
+)
+
 // MixnetServerInfo contains the data about mixnet server which plays the role
 // in Pedersen DKG protocol
 type MixnetServerInfo struct {
-	ReceivedShare big.Int
-	X             []big.Int
-	VerifiedCnt   int
-	ComplainedCnt int
+	ReceivedShare   big.Int
+	X               []big.Int
+	VerifiedCnt     int
+	ComplainedCnt   int
+	QualifiedStatus int
 }
