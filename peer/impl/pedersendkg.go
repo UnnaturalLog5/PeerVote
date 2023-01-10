@@ -129,6 +129,7 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 
 	n.sendDKGShareValidationMessage(dkgMessage.ElectionID, election.Base.MixnetServers, dkgMessage.MixnetServerID, isValid)
 
+	// todo update election in the store -> alter election store so it stores *references* to elections instead
 	return nil
 }
 
@@ -143,7 +144,7 @@ func (n *node) sendDKGShareValidationMessage(electionID string, mixnetServers []
 		recipients[mixnetServer] = struct{}{}
 	}
 
-	dkgShareValidationMessage := types.DKGShareValiditionMessage{
+	dkgShareValidationMessage := types.DKGShareValidationMessage{
 		ElectionID:     electionID,
 		MixnetServerID: mixnetServerID,
 		IsShareValid:   isShareValid,
@@ -164,6 +165,84 @@ func (n *node) sendDKGShareValidationMessage(electionID string, mixnetServers []
 	if err != nil {
 		return
 	}
+}
+
+// HandleDKGShareValidationMessage handles types.DKGShareValidationMessage
+func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.Packet) error {
+	// cast the message to its actual type. You assume it is the right type.
+	dkgShareValidationMessage, ok := msg.(*types.DKGShareValidationMessage)
+	if !ok {
+		return fmt.Errorf("wrong type: %T", msg)
+	}
+
+	// Processing DKGShareMessage
+
+	election := n.electionStore.Get(dkgShareValidationMessage.ElectionID)
+	// todo what if node hasn't received ElectionAnnounceMessage yet?
+	// add some kind of synchronization
+
+	mixnetServers := election.Base.MixnetServers
+
+	if !contains(mixnetServers, n.myAddr) {
+		return fmt.Errorf("node received DKGShareValidationMessage for electionID %s,"+
+			" but the node is not one of the mixnetServers", dkgShareValidationMessage.ElectionID)
+	}
+
+	if dkgShareValidationMessage.IsShareValid {
+		election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].VerifiedCnt++
+	} else {
+		election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].ComplainedCnt++
+	}
+
+	if n.ShouldSendElectionReadyMessage(election) {
+		n.sendElectionReadyMessage(election)
+	}
+
+	return nil
+}
+
+// sendElectionReadyMessage broadcasts types.ElectionReadyMessage
+func (n *node) sendElectionReadyMessage(election types.Election) {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending ElectionReadyMessage")
+
+	qualifiedServers := n.GetQualifiedMixnetServers(election)
+
+	electionReadyMessage := types.ElectionReadyMessage{
+		ElectionID:       election.Base.ElectionID,
+		QualifiedServers: qualifiedServers,
+	}
+	electionReadyTransportMessage, err := marshalMessage(&electionReadyMessage)
+
+	err = n.Broadcast(electionReadyTransportMessage)
+	if err != nil {
+		return
+	}
+}
+
+// GetQualifiedMixnetServers returns a list of qualified mixnet servers for the corresponding
+// election.
+func (n *node) GetQualifiedMixnetServers(election types.Election) []string {
+	qualifiedServers := make([]string, 0)
+	for i := 0; i < len(election.Base.MixnetServers); i++ {
+		if election.Base.MixnetServerInfos[i].VerifiedCnt == len(election.Base.MixnetServers) {
+			qualifiedServers = append(qualifiedServers, election.Base.MixnetServers[i])
+		}
+	}
+	return qualifiedServers
+}
+
+// ShouldSendElectionReadyMessage checks whether types.ElectionReadyMessage should be sent.
+// types.ElectionReadyMessage should be sent only when all n*n types.DKGShareValidationMessage
+// have arrived and if all of the mixnet servers have clear status (Qualified/Disqualified)
+func (n *node) ShouldSendElectionReadyMessage(election types.Election) bool {
+	serverCnt := len(election.Base.MixnetServers)
+	for _, mixnetServerInfo := range election.Base.MixnetServerInfos {
+		if mixnetServerInfo.VerifiedCnt+mixnetServerInfo.ComplainedCnt != serverCnt ||
+			(mixnetServerInfo.ComplainedCnt != 0 && mixnetServerInfo.ComplainedCnt < serverCnt/2) {
+			return false
+		}
+	}
+	return true
 }
 
 // VerifyEquation verifies if the received share is valid as a part of the second step

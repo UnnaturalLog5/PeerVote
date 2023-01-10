@@ -35,8 +35,13 @@ type DKGShareMessage struct {
 	X              []big.Int
 }
 
-type DKGShareValiditionMessage struct {
+type DKGShareValidationMessage struct {
 	ElectionID     string
 	MixnetServerID int
 	IsShareValid   bool
+}
+
+type ElectionReadyMessage struct {
+	ElectionID       string
+	QualifiedServers []string
 }
