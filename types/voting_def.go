@@ -6,11 +6,12 @@ import (
 )
 
 type ElectionBase struct {
-	ElectionID          string
-	Announcer           string
-	Title               string
-	Description         string
-	Choices             []Choice
+	ElectionID  string
+	Announcer   string
+	Title       string
+	Description string
+	Choices     []Choice
+
 	Duration            time.Duration
 	Expiration          time.Time
 	MixnetServers       []string

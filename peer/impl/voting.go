@@ -20,20 +20,35 @@ func (n *node) AnnounceElection(title, description string, choices, mixnetServer
 	}
 
 	electionID := xid.New().String()
-	startElectionMessage := types.AnnounceElectionMessage{
+	mixnetServersPoints := make([]int, len(mixnetServers))
+	initiators := make(map[string]struct{})
+
+	announceElectionMessage := types.AnnounceElectionMessage{
 		Base: types.ElectionBase{
 			ElectionID:  electionID,
 			Announcer:   n.myAddr,
 			Title:       title,
 			Description: description,
 			Choices:     electionChoices,
-			Duration:    electionDuration,
+
+			Duration: electionDuration,
+
+			// initiated later (see HandleInitiateElectionMessage)
 			// Expiration:    expirationTime,
 			MixnetServers: mixnetServers,
+
+			// initiated only if needed (see HandleAnnounceElectionMessage)
+			// MixnetServerInfos:   make(make([]types.MixnetServerInfo, len(mixnetServers)),
+
+			// Incremented when mixnet server is among qualified nodes in types.ElectionReadyMessage
+			MixnetServersPoints: mixnetServersPoints,
+
+			ElectionReadyCnt: 0,
+			Initiators:       initiators,
 		},
 	}
 
-	err := n.sendAnnounceElectionMessage(startElectionMessage)
+	err := n.sendAnnounceElectionMessage(announceElectionMessage)
 	if err != nil {
 		return "", err
 	}
