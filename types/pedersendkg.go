@@ -1,12 +1,15 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // ---
 
 // NewEmpty implements types.Message.
 func (m DKGShareMessage) NewEmpty() Message {
-	return &AnnounceElectionMessage{}
+	return &DKGShareMessage{}
 }
 
 // Name implements types.Message.
@@ -28,7 +31,7 @@ func (m DKGShareMessage) HTML() string {
 
 // NewEmpty implements types.Message.
 func (m DKGShareValidationMessage) NewEmpty() Message {
-	return &AnnounceElectionMessage{}
+	return &DKGShareValidationMessage{}
 }
 
 // Name implements types.Message.
@@ -51,7 +54,7 @@ func (m DKGShareValidationMessage) HTML() string {
 
 // NewEmpty implements types.Message.
 func (m ElectionReadyMessage) NewEmpty() Message {
-	return &AnnounceElectionMessage{}
+	return &ElectionReadyMessage{}
 }
 
 // Name implements types.Message.
@@ -70,9 +73,11 @@ func (m ElectionReadyMessage) HTML() string {
 	return m.String()
 }
 
+// ---
+
 // NewEmpty implements types.Message.
 func (m DKGRevealShareMessage) NewEmpty() Message {
-	return &AnnounceElectionMessage{}
+	return &DKGRevealShareMessage{}
 }
 
 // Name implements types.Message.
@@ -88,5 +93,28 @@ func (m DKGRevealShareMessage) String() string {
 
 // HTML implements types.Message.
 func (m DKGRevealShareMessage) HTML() string {
+	return m.String()
+}
+
+// ---
+
+// NewEmpty implements types.Message.
+func (m StartElectionMessage) NewEmpty() Message {
+	return &StartElectionMessage{}
+}
+
+// Name implements types.Message.
+func (m StartElectionMessage) Name() string {
+	return "start-election"
+}
+
+// String implements types.Message.
+func (m StartElectionMessage) String() string {
+	return fmt.Sprintf("StartElectionMessage: electionID: %s;  expiration: %s",
+		m.ElectionID, m.Expiration.Format(time.RFC822))
+}
+
+// HTML implements types.Message.
+func (m StartElectionMessage) HTML() string {
 	return m.String()
 }

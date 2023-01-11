@@ -37,23 +37,8 @@ func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Pack
 		n.electionStore.Set(election.Base.ElectionID, election)
 	}
 
-	// TODO
-	// if i am the first mixnet server, set timer for expiration to start with mixing
 	if election.Base.MixnetServers[0] == n.myAddr {
-		go func() {
-			// wait until the set expiration date until tallying votes
-			expireIn := election.Base.Expiration.Sub(time.Now())
-			<-time.After(expireIn)
 
-			// TODO
-			// mix and forward
-			// n.MixAndForward()
-
-			// for now just start tallying
-
-			log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting tallying")
-			n.Tally(election.Base.ElectionID)
-		}()
 	}
 	return nil
 }

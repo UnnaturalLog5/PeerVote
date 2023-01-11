@@ -7,6 +7,7 @@ import (
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"math/big"
+	"time"
 )
 
 // PedersenDkg implements Pedersen’s Distributed Key Generation Protocol
@@ -124,7 +125,7 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 		QualifiedStatus: types.NOT_DECIDED_YET,
 	}
 
-	myMixnetID := big.NewInt(int64(n.GetMyMixnetServerID(election.Base.MixnetServers)))
+	myMixnetID := big.NewInt(int64(n.GetMyMixnetServerID(election)))
 	isValid := n.VerifyEquation(myMixnetID, &dkgMessage.Share, dkgMessage.X)
 
 	n.sendDKGShareValidationMessage(dkgMessage.ElectionID, election.Base.MixnetServers, dkgMessage.MixnetServerID, isValid)
@@ -205,7 +206,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 				n.sendElectionReadyMessage(election)
 			}
 		} else {
-			myMixnetServerID := n.GetMyMixnetServerID(election.Base.MixnetServers)
+			myMixnetServerID := n.GetMyMixnetServerID(election)
 			if myMixnetServerID == dkgShareValidationMessage.MixnetServerID {
 				n.sendDKGRevealShareMessage(election, myMixnetServerID, dkgShareValidationMessage.MixnetServerID)
 			}
@@ -317,6 +318,75 @@ func (n *node) sendElectionReadyMessage(election types.Election) {
 	if err != nil {
 		return
 	}
+
+	// send election start message if I am among the qualified nodes with the lowest ID
+	if n.ShouldInitiateElection(election) {
+		n.InitiateElection(election)
+	}
+}
+
+// InitiateElection sends types.StartElectionMessage indicating that the election
+// has officially started and that the peers are allowed to cast their votes.
+func (n *node) InitiateElection(election types.Election) {
+
+	election.Base.Expiration = time.Now().Add(election.Base.Duration)
+	n.sendStartElectionMessage(election)
+
+	// TODO
+	// set timer for expiration to start with mixing
+	go func() {
+		// wait until the set expiration date until tallying votes
+		expireIn := election.Base.Expiration.Sub(time.Now())
+		<-time.After(expireIn)
+
+		// TODO
+		// mix and forward
+		// n.MixAndForward()
+
+		// for now just start tallying
+
+		log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting tallying")
+		n.Tally(election.Base.ElectionID)
+	}()
+}
+
+// sendStartElectionMessage creates a new types.StartElectionMessage, and broadcasts it to all the peers in the network,
+func (n *node) sendStartElectionMessage(election types.Election) {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending StartElectionMessage")
+
+	startElectionMessage := types.StartElectionMessage{
+		ElectionID: election.Base.ElectionID,
+		Expiration: election.Base.Expiration,
+	}
+
+	msg, err := marshalMessage(&startElectionMessage)
+
+	if err != nil {
+		return
+	}
+
+	err = n.Broadcast(msg)
+	if err != nil {
+		return
+	}
+}
+
+// ShouldInitiateElection checks whether mixnet node should start the election
+func (n *node) ShouldInitiateElection(election types.Election) bool {
+	myID := n.GetMyMixnetServerID(election)
+	initiatorID := n.GetMixnetServerInitiatorID(election)
+	return myID == initiatorID
+}
+
+// GetMixnetServerInitiatorID returns the ID of the mixnet node which is responsible for
+// starting the election, that is, the ID of a qualified mixnet node with the lowest ID
+func (n *node) GetMixnetServerInitiatorID(election types.Election) int {
+	for i := 0; i < len(election.Base.MixnetServerInfos); i++ {
+		if election.Base.MixnetServerInfos[i].QualifiedStatus == types.QUALIFIED {
+			return i
+		}
+	}
+	return -1
 }
 
 // HandleElectionReadyMessage processes types.ElectionReadyMessage. This message
@@ -391,13 +461,11 @@ func (n *node) ReconstructPublicKey(election types.Election) *big.Int {
 }
 
 // GetMyMixnetServerID returns the ID of the node within mixnet servers
-func (n *node) GetMyMixnetServerID(mixnetServers []string) int {
-	for i, addr := range mixnetServers {
+func (n *node) GetMyMixnetServerID(election types.Election) int {
+	for i, addr := range election.Base.MixnetServers {
 		if addr == n.myAddr {
 			return i + 1
 		}
 	}
 	return -1
 }
-
-// todo handle ready message

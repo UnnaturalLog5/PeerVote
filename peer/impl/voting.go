@@ -9,7 +9,7 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-func (n *node) StartElection(title, description string, choices, mixnetServers []string, electionDuration time.Duration) (string, error) {
+func (n *node) AnnounceElection(title, description string, choices, mixnetServers []string, electionDuration time.Duration) (string, error) {
 	// generate election id
 	electionChoices := []types.Choice{}
 	for _, choice := range choices {
@@ -19,17 +19,16 @@ func (n *node) StartElection(title, description string, choices, mixnetServers [
 		})
 	}
 
-	expirationTime := time.Now().Add(electionDuration)
-
 	electionID := xid.New().String()
 	startElectionMessage := types.AnnounceElectionMessage{
 		Base: types.ElectionBase{
-			ElectionID:    electionID,
-			Initiator:     n.myAddr,
-			Title:         title,
-			Description:   description,
-			Choices:       electionChoices,
-			Expiration:    expirationTime,
+			ElectionID:  electionID,
+			Initiator:   n.myAddr,
+			Title:       title,
+			Description: description,
+			Choices:     electionChoices,
+			Duration:    electionDuration,
+			// Expiration:    expirationTime,
 			MixnetServers: mixnetServers,
 		},
 	}

@@ -1,6 +1,9 @@
 package types
 
-import "math/big"
+import (
+	"math/big"
+	"time"
+)
 
 // PedersenSuite is a structure which contains all the
 // parameters needed for establishing Pedersen DKG protocol.
@@ -51,4 +54,9 @@ type DKGRevealShareMessage struct {
 	Share               big.Int
 	MixnetServerID      int
 	ComplainingServerID int
+}
+
+type StartElectionMessage struct {
+	ElectionID string
+	Expiration time.Time
 }

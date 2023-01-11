@@ -11,6 +11,7 @@ type ElectionBase struct {
 	Title               string
 	Description         string
 	Choices             []Choice
+	Duration            time.Duration
 	Expiration          time.Time
 	MixnetServers       []string
 	MixnetServerInfos   []MixnetServerInfo
