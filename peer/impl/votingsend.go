@@ -25,18 +25,6 @@ func (n *node) sendVoteMessage(mixnetPeer string, voteMessage types.VoteMessage)
 	return nil
 }
 
-// func (n *node) sendMixedVotesMessage(mixnetPeer string, voteMessage types.VoteMessage) error {
-// 	msg, err := marshalMessage(voteMessage)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	err = n.Broadcast(msg)
-// 	if err != nil {
-// 		return err
-// 	}
-// }
-
 func (n *node) sendResultsMessage(resultMessage types.ResultMessage) error {
 	msg, err := marshalMessage(resultMessage)
 	if err != nil {

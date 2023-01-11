@@ -76,33 +76,49 @@ func (n *node) Vote(electionID string, choiceID string) error {
 	return nil
 }
 
-// func (n *node) MixAndForward(electionID string, encryptedVotes []string) error {
-// 	// mix
-// 	// generate proofs
+func (n *node) Mix(electionID string, hop uint) error {
+	election := n.electionStore.Get(electionID)
+	votes := election.Votes
 
-// 	election := n.electionStore.Get(electionID)
+	// TODO
+	// do the actual mixing
+	// mixedVotes := peervotecrypto.Mix(votes)
 
-// 	myIndex := 0
-// 	// get next minxet server
-// 	for i, mixnetServer := range election.MixnetServers {
-// 		if mixnetServer == n.myAddr {
-// 			myIndex = i
-// 		}
-// 	}
+	// for now
+	mixedVotes := votes
 
-// 	if myIndex < len(election.MixnetServers)-1 {
-// 		// send mixed votes to next mixnet
-// 		nextHop := election.MixnetServers[myIndex+1]
+	nextHop := hop + 1
 
-// 	} else {
-// 		// I'm the last mixnet server
-// 		// tally
-// 	}
+	if nextHop >= uint(len(election.Base.MixnetServers)) {
+		// done with mixing -> tally
+		log.Info().Str("peerAddr", n.myAddr).Msgf("Last mixnet node reached: Start Tallying")
+		n.Tally(electionID, mixedVotes)
+		return nil
+	}
 
-// 	return nil
-// }
+	// otherwise continue forwarding to the next mixnet server
 
-func (n *node) Tally(electionID string) {
+	mixMessage := types.MixMessage{
+		ElectionID: electionID,
+		Votes:      mixedVotes,
+		NextHop:    nextHop,
+	}
+
+	// get address for next hop
+	mixnetPeer := election.Base.MixnetServers[mixMessage.NextHop]
+
+	recipients := make(map[string]struct{})
+	recipients[mixnetPeer] = struct{}{}
+
+	err := n.sendPrivateMessage(recipients, mixMessage)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) Tally(electionID string, votes []string) {
 	election := n.electionStore.Get(electionID)
 
 	// we want 0 to show up as a count as well
@@ -110,7 +126,7 @@ func (n *node) Tally(electionID string) {
 	results := map[string]uint{}
 	for _, choice := range election.Base.Choices {
 		count := uint(0)
-		for _, vote := range election.Votes {
+		for _, vote := range votes {
 			if vote == choice.ChoiceID {
 				count++
 			}

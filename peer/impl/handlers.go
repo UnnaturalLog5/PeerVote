@@ -20,7 +20,7 @@ func (n *node) HandleChatMessage(t types.Message, pkt transport.Packet) error {
 
 // is type of registry.Exec
 func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling rumorsMessage from %v", pkt.Header.Source)
+	// log.Info().Str("peerAddr", n.myAddr).Msgf("handling rumorsMessage from %v", pkt.Header.Source)
 
 	// sendAck after processing rumors
 	defer func() {
@@ -91,7 +91,7 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 
 // is type of registry.Exec
 func (n *node) HandleAckMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling ack from %v", pkt.Header.Source)
+	// log.Info().Str("peerAddr", n.myAddr).Msgf("handling ack from %v", pkt.Header.Source)
 
 	// process rumor
 	ackMessage := types.AckMessage{}
@@ -285,7 +285,7 @@ func (n *node) HandlePrivateMessage(t types.Message, pkt transport.Packet) error
 
 // is type of registry.Exec
 func (n *node) HandleStatusMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling statusMessage from %v", pkt.Header.Source)
+	// log.Info().Str("peerAddr", n.myAddr).Msgf("handling statusMessage from %v", pkt.Header.Source)
 
 	// process rumor
 	statusMessage := types.StatusMessage{}

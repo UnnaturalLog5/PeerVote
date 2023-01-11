@@ -75,3 +75,25 @@ func (m ResultMessage) String() string {
 func (m ResultMessage) HTML() string {
 	return m.String()
 }
+
+// ---
+
+// NewEmpty implements types.Message.
+func (m MixMessage) NewEmpty() Message {
+	return &StartElectionMessage{}
+}
+
+// Name implements types.Message.
+func (m MixMessage) Name() string {
+	return "mix"
+}
+
+// String implements types.Message.
+func (m MixMessage) String() string {
+	return fmt.Sprintf("<%s> - MixMessage Hop %d", m.ElectionID, m.NextHop)
+}
+
+// HTML implements types.Message.
+func (m MixMessage) HTML() string {
+	return m.String()
+}

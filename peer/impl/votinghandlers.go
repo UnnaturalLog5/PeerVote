@@ -36,14 +36,10 @@ func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet)
 			expireIn := election.Base.Expiration.Sub(time.Now())
 			<-time.After(expireIn)
 
-			// TODO
 			// mix and forward
-			// n.MixAndForward()
-
-			// for now just start tallying
-
-			log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting tallying")
-			n.Tally(election.Base.ElectionID)
+			log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting mixing")
+			// send to ourselves a MixMessage (hop 0) so we can bootstrap the mixing process
+			n.Mix(election.Base.ElectionID, 0)
 		}()
 	}
 	return nil
@@ -66,6 +62,25 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 
 	n.electionStore.StoreVote(election.Base.ElectionID, voteMessage.ChoiceID)
 
+	return nil
+}
+
+func (n *node) HandleMixMessage(t types.Message, pkt transport.Packet) error {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling MixMessage from %v", pkt.Header.Source)
+	mixMessage := types.MixMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &mixMessage)
+	if err != nil {
+		return err
+	}
+
+	election := n.electionStore.Get(mixMessage.ElectionID)
+	election.Votes = mixMessage.Votes
+	n.electionStore.Set(mixMessage.ElectionID, election)
+
+	err = n.Mix(mixMessage.ElectionID, mixMessage.NextHop)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

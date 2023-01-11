@@ -2,6 +2,8 @@ package types
 
 import "time"
 
+// --- Election Types ---
+
 type ElectionBase struct {
 	ElectionID    string
 	Initiator     string
@@ -25,6 +27,8 @@ type Choice struct {
 	Name     string
 }
 
+// --- Messages ---
+
 type StartElectionMessage struct {
 	Base ElectionBase
 }
@@ -35,11 +39,12 @@ type VoteMessage struct {
 	// Proof
 }
 
-// type MixedVotesMessage struct {
-// 	ElectionID string
-// 	Votes      []string
-// 	// Proofs
-// }
+type MixMessage struct {
+	ElectionID string
+	Votes      []string
+	NextHop    uint
+	// Proofs
+}
 
 type ResultMessage struct {
 	ElectionID string

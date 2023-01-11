@@ -137,7 +137,7 @@ func (n *node) route(dest string, pkt transport.Packet) error {
 }
 
 func (n *node) sendAck(pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("acknowledging receipt of pkt from %v", pkt.Header.Source)
+	// log.Info().Str("peerAddr", n.myAddr).Msgf("acknowledging receipt of pkt from %v", pkt.Header.Source)
 
 	dest := pkt.Header.Source
 

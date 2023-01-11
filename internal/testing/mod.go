@@ -620,6 +620,54 @@ func GetTLC(t *testing.T, msg *transport.Message) types.TLCMessage {
 	return tlcMessage
 }
 
+// GetStartElection returns the PaxosPromise associated to the transport.Message.
+func GetStartElection(t *testing.T, msg *transport.Message) types.StartElectionMessage {
+	require.Equal(t, "startelection", msg.Type)
+
+	var startElectionMessage types.StartElectionMessage
+
+	err := json.Unmarshal(msg.Payload, &startElectionMessage)
+	require.NoError(t, err)
+
+	return startElectionMessage
+}
+
+// GetVote returns the PaxosPromise associated to the transport.Message.
+func GetVote(t *testing.T, msg *transport.Message) types.VoteMessage {
+	require.Equal(t, "vote", msg.Type)
+
+	var voteMessage types.VoteMessage
+
+	err := json.Unmarshal(msg.Payload, &voteMessage)
+	require.NoError(t, err)
+
+	return voteMessage
+}
+
+// GetMix returns the PaxosPromise associated to the transport.Message.
+func GetMix(t *testing.T, msg *transport.Message) types.MixMessage {
+	require.Equal(t, "mix", msg.Type)
+
+	var mixMessage types.MixMessage
+
+	err := json.Unmarshal(msg.Payload, &mixMessage)
+	require.NoError(t, err)
+
+	return mixMessage
+}
+
+// GetResults returns the PaxosPromise associated to the transport.Message.
+func GetResults(t *testing.T, msg *transport.Message) types.ResultMessage {
+	require.Equal(t, "result", msg.Type)
+
+	var resultsMessage types.ResultMessage
+
+	err := json.Unmarshal(msg.Payload, &resultsMessage)
+	require.NoError(t, err)
+
+	return resultsMessage
+}
+
 // GetPrivate returns the Private message associated to the transport.Message.
 func GetPrivate(t *testing.T, msg *transport.Message) types.PrivateMessage {
 	require.Equal(t, "private", msg.Type)
