@@ -319,13 +319,35 @@ func (n *node) sendElectionReadyMessage(election types.Election) {
 	}
 }
 
+// HandleElectionReadyMessage processes types.ElectionReadyMessage. This message
+// can be received by any peer. The peer collects the information about qualified
+// (trusted) mixnet nodes.
+func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packet) error {
+	// cast the message to its actual type. You assume it is the right type.
+	electionReadyMessage, ok := msg.(*types.ElectionReadyMessage)
+	if !ok {
+		return fmt.Errorf("wrong type: %T", msg)
+	}
+
+	// Processing ElectionReadyMessage
+
+	// update QualifiedCnt for each mixnet server
+	election := n.electionStore.Get(electionReadyMessage.ElectionID)
+
+	for _, qualifiedServerID := range electionReadyMessage.QualifiedServers {
+		election.Base.MixnetServersPoints[qualifiedServerID]++
+	}
+
+	return nil
+}
+
 // GetQualifiedMixnetServers returns a list of qualified mixnet servers for the corresponding
 // election.
-func (n *node) GetQualifiedMixnetServers(election types.Election) []string {
-	qualifiedServers := make([]string, 0)
+func (n *node) GetQualifiedMixnetServers(election types.Election) []int {
+	qualifiedServers := make([]int, 0)
 	for i := 0; i < len(election.Base.MixnetServers); i++ {
 		if election.Base.MixnetServerInfos[i].QualifiedStatus == types.QUALIFIED {
-			qualifiedServers = append(qualifiedServers, election.Base.MixnetServers[i])
+			qualifiedServers = append(qualifiedServers, i)
 		}
 	}
 	return qualifiedServers
@@ -377,3 +399,5 @@ func (n *node) GetMyMixnetServerID(mixnetServers []string) int {
 	}
 	return -1
 }
+
+// todo handle ready message

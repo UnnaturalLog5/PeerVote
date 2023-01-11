@@ -6,14 +6,15 @@ import (
 )
 
 type ElectionBase struct {
-	ElectionID        string
-	Initiator         string
-	Title             string
-	Description       string
-	Choices           []Choice
-	Expiration        time.Time
-	MixnetServers     []string
-	MixnetServerInfos []MixnetServerInfo
+	ElectionID          string
+	Initiator           string
+	Title               string
+	Description         string
+	Choices             []Choice
+	Expiration          time.Time
+	MixnetServers       []string
+	MixnetServerInfos   []MixnetServerInfo
+	MixnetServersPoints []int // Incremented when mixnet server is among qualified nodes in types.ElectionReadyMessage
 }
 
 type Election struct {

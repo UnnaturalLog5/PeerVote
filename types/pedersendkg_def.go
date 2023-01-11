@@ -43,7 +43,7 @@ type DKGShareValidationMessage struct {
 
 type ElectionReadyMessage struct {
 	ElectionID       string
-	QualifiedServers []string
+	QualifiedServers []int
 }
 
 type DKGRevealShareMessage struct {
