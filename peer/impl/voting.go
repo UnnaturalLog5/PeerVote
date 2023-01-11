@@ -60,6 +60,11 @@ func (n *node) Vote(electionID string, choiceID string) error {
 		return errors.New("this peer has already voted")
 	}
 
+	if !n.IsElectionStarted(election) {
+		// todo display some kind of a message on frontend
+		return errors.New("election hasn't started yet")
+	}
+
 	// TODO
 	// rethink this mechanism, this might cause bugs when the vote is stored here
 	// but sendVoteMessage fails without at least locally processing the rumor
