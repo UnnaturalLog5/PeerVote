@@ -17,28 +17,10 @@ func (n *node) sendStartElectionMessage(electionMessage types.StartElectionMessa
 }
 
 func (n *node) sendVoteMessage(mixnetPeer string, voteMessage types.VoteMessage) error {
-	voteTransportMessage, err := marshalMessage(voteMessage)
-	if err != nil {
-		return err
-	}
-
 	recipients := make(map[string]struct{})
 	recipients[mixnetPeer] = struct{}{}
 
-	privateMessage := types.PrivateMessage{
-		Recipients: recipients,
-		Msg:        &voteTransportMessage,
-	}
-
-	msg, err := marshalMessage(privateMessage)
-	if err != nil {
-		return err
-	}
-
-	err = n.Broadcast(msg)
-	if err != nil {
-		return err
-	}
+	n.sendPrivateMessage(recipients, voteMessage)
 
 	return nil
 }

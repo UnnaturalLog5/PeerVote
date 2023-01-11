@@ -39,7 +39,7 @@ func Test_SimpleElection(t *testing.T) {
 
 	mixnetServers := []string{node2.GetAddr()}
 
-	electionID, err := node1.StartElection("Election for Mayer", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*3)
+	electionID, err := node1.StartElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*3)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
@@ -97,7 +97,7 @@ func Test_ElectionExpired(t *testing.T) {
 	choices := []string{"One choice", "a better choice"}
 
 	mixnetServers := []string{node2.GetAddr()}
-	electionID, err := node1.StartElection("Election for Mayer", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second)
+	electionID, err := node1.StartElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second * 2)

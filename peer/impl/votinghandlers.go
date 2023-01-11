@@ -29,7 +29,6 @@ func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet)
 
 	n.electionStore.Set(election.Base.ElectionID, election)
 
-	// TODO
 	// if i am the first mixnet server, set timer for expiration to start with mixing
 	if election.Base.MixnetServers[0] == n.myAddr {
 		go func() {

@@ -514,3 +514,27 @@ func (n *node) sendTLCMessage(step uint, block types.BlockchainBlock) {
 		return
 	}
 }
+
+func (n *node) sendPrivateMessage(recipients map[string]struct{}, message types.Message) error {
+	transportMessage, err := marshalMessage(message)
+	if err != nil {
+		return err
+	}
+
+	privateMessage := types.PrivateMessage{
+		Recipients: recipients,
+		Msg:        &transportMessage,
+	}
+
+	msg, err := marshalMessage(privateMessage)
+	if err != nil {
+		return err
+	}
+
+	err = n.Broadcast(msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
