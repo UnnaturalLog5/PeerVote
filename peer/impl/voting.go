@@ -23,7 +23,7 @@ func (n *node) AnnounceElection(title, description string, choices, mixnetServer
 	startElectionMessage := types.AnnounceElectionMessage{
 		Base: types.ElectionBase{
 			ElectionID:  electionID,
-			Initiator:   n.myAddr,
+			Announcer:   n.myAddr,
 			Title:       title,
 			Description: description,
 			Choices:     electionChoices,

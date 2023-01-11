@@ -350,6 +350,27 @@ func (n *node) InitiateElection(election types.Election) {
 	}()
 }
 
+// HandleStartElectionMessage processes types.StartElectionMessage. This message
+// can be received by any peer. The peer learns that the election can officially start.
+func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packet) error {
+	// cast the message to its actual type. You assume it is the right type.
+	startElectionMessage, ok := msg.(*types.StartElectionMessage)
+	if !ok {
+		return fmt.Errorf("wrong type: %T", msg)
+	}
+
+	// Processing types.StartElectionMessage
+
+	election := n.electionStore.Get(startElectionMessage.ElectionID)
+	election.Base.Initiators[pkt.Header.Source] = struct{}{}
+
+	if n.IsElectionStarted(election) {
+		// todo election started, I am allowed to cast a vote
+	}
+
+	return nil
+}
+
 // sendStartElectionMessage creates a new types.StartElectionMessage, and broadcasts it to all the peers in the network,
 func (n *node) sendStartElectionMessage(election types.Election) {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending StartElectionMessage")
@@ -403,9 +424,13 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 
 	// update QualifiedCnt for each mixnet server
 	election := n.electionStore.Get(electionReadyMessage.ElectionID)
-
 	for _, qualifiedServerID := range electionReadyMessage.QualifiedServers {
 		election.Base.MixnetServersPoints[qualifiedServerID]++
+	}
+	election.Base.ElectionReadyCnt++
+
+	if n.IsElectionStarted(election) {
+		// todo election started, I am allowed to cast a vote
 	}
 
 	return nil

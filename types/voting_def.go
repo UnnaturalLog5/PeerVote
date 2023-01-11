@@ -7,7 +7,7 @@ import (
 
 type ElectionBase struct {
 	ElectionID          string
-	Initiator           string
+	Announcer           string
 	Title               string
 	Description         string
 	Choices             []Choice
@@ -16,6 +16,8 @@ type ElectionBase struct {
 	MixnetServers       []string
 	MixnetServerInfos   []MixnetServerInfo
 	MixnetServersPoints []int // Incremented when mixnet server is among qualified nodes in types.ElectionReadyMessage
+	ElectionReadyCnt    int
+	Initiators          map[string]struct{}
 }
 
 type Election struct {

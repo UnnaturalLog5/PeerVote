@@ -174,3 +174,25 @@ type node struct {
 
 	electionStore electionstore.ElectionStore
 }
+
+// IsElectionStarted checks if the election started (that is, one of the trusted mixnet
+// servers initiated the election and the peer is allowed to cast a vote)
+func (n *node) IsElectionStarted(election types.Election) bool {
+	if election.Base.ElectionReadyCnt != len(election.Base.MixnetServers) {
+		return false
+	}
+	initiator := n.GetFirstQualifiedInitiator(election)
+	_, exists := election.Base.Initiators[initiator]
+	return exists
+}
+
+// GetFirstQualifiedInitiator returns the ID of the mixnet server which is responsible for
+// initiating the election
+func (n *node) GetFirstQualifiedInitiator(election types.Election) string {
+	for i := 0; i < len(election.Base.MixnetServersPoints); i++ {
+		if election.Base.MixnetServersPoints[i] > n.conf.PedersenSuite.T {
+			return election.Base.MixnetServers[i]
+		}
+	}
+	return ""
+}
