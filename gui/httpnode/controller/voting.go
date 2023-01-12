@@ -201,7 +201,7 @@ func (v voting) electionsPost(w http.ResponseWriter, r *http.Request) {
 
 	expirationTime := time.Second * time.Duration(res.ExpirationTime)
 
-	_, err = v.node.StartElection(res.Title, res.Description, res.Choices, res.MixnetServers, expirationTime)
+	_, err = v.node.AnnounceElection(res.Title, res.Description, res.Choices, res.MixnetServers, expirationTime)
 	if err != nil {
 		http.Error(w, "failed to start election: "+err.Error(),
 			http.StatusInternalServerError)

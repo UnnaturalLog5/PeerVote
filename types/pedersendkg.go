@@ -36,7 +36,7 @@ func (m DKGShareValidationMessage) NewEmpty() Message {
 
 // Name implements types.Message.
 func (m DKGShareValidationMessage) Name() string {
-	return "dkg-share"
+	return "dkg-share-validation"
 }
 
 // String implements types.Message.

@@ -25,10 +25,10 @@ type PedersenSuite struct {
 }
 
 var DefaultPedersenSuite = PedersenSuite{
-	P: big.Int{},
-	G: big.Int{},
-	Q: big.Int{},
-	T: 5,
+	P: *big.NewInt(7), // Z*7
+	G: *big.NewInt(2), // <2>
+	Q: *big.NewInt(3), // <2> = {2, 4, 1}
+	T: 0,
 }
 
 type DKGShareMessage struct {

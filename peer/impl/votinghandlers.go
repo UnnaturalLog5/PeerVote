@@ -13,14 +13,14 @@ import (
 func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Packet) error {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling AnnounceElectionMessage from %v", pkt.Header.Source)
 
-	startElectionMessage := types.AnnounceElectionMessage{}
-	err := json.Unmarshal(pkt.Msg.Payload, &startElectionMessage)
+	announceElectionMessage := types.AnnounceElectionMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &announceElectionMessage)
 	if err != nil {
 		return err
 	}
 
 	election := types.Election{
-		Base: startElectionMessage.Base,
+		Base: announceElectionMessage.Base,
 	}
 
 	if n.electionStore.Exists(election.Base.ElectionID) {
@@ -37,9 +37,6 @@ func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Pack
 		n.electionStore.Set(election.Base.ElectionID, election)
 	}
 
-	if election.Base.MixnetServers[0] == n.myAddr {
-
-	}
 	return nil
 }
 
@@ -54,6 +51,9 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 	election := n.electionStore.Get(voteMessage.ElectionID)
 
 	// accept if not expired
+	println(time.Now().Format(time.RFC3339))
+	println(election.Base.Expiration.Format(time.RFC3339))
+
 	if !time.Now().Before(election.Base.Expiration) {
 		return errors.New("this election expired - vote won't be accepted")
 	}

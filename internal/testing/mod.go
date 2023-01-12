@@ -150,6 +150,8 @@ type configTemplate struct {
 	paxosThreshold     func(uint) int
 	paxosID            uint
 	paxosProposerRetry time.Duration
+
+	pedersenSuite types.PedersenSuite
 }
 
 func newConfigTemplate() configTemplate {
@@ -184,6 +186,8 @@ func newConfigTemplate() configTemplate {
 		},
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
+
+		pedersenSuite: types.DefaultPedersenSuite,
 	}
 }
 
@@ -320,6 +324,8 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.PaxosThreshold = template.paxosThreshold
 	config.PaxosID = template.paxosID
 	config.PaxosProposerRetry = template.paxosProposerRetry
+
+	config.PedersenSuite = template.pedersenSuite
 
 	node := f(config)
 

@@ -27,17 +27,20 @@ func (n *node) PedersenDkg(electionID string, mixnetServers []string) {
 		X[i].Exp(&n.conf.PedersenSuite.G, &a[i], &n.conf.PedersenSuite.P)
 	}
 	f := func(id int) big.Int {
-		sum := big.Int{}
-		for i := 0; i < n.conf.PedersenSuite.T; i++ {
-			tmp := new(big.Int).Mul(&a[i], new(big.Int).Exp(big.NewInt(int64(id)), big.NewInt(int64(id)), nil))
+		base := big.NewInt(int64(id))
+		sum := a[0]
+		for i := 1; i <= n.conf.PedersenSuite.T; i++ {
+			exp := big.NewInt(int64(i))
+			factor := new(big.Int).Exp(base, exp, nil)
+			tmp := new(big.Int).Mul(&a[i], factor)
 			sum.Add(&sum, tmp)
 		}
-		return sum
+		return *new(big.Int).Mod(&sum, &n.conf.PedersenSuite.Q)
 	}
 
 	// Compute the share xij and send it to each mixnetServer
 	for i := 0; i < len(mixnetServers); i++ {
-		share := f(i + 1)
+		share := f(i + 1) // IDs of the mixnet server starts from 1
 		n.sendDKGShareMessage(electionID, mixnetServers[i], i, share, X)
 	}
 }
@@ -76,7 +79,7 @@ func (n *node) sendDKGShareMessage(electionID string, mixnetServer string, mixne
 		Share:          share,
 		X:              X,
 	}
-	dkgShareTransportMessage, err := marshalMessage(dkgShareMessage)
+	dkgShareTransportMessage, err := marshalMessage(&dkgShareMessage)
 
 	privateMessage := types.PrivateMessage{
 		Recipients: recipients,
@@ -103,6 +106,7 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 	}
 
 	// Processing DKGShareMessage
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling DKGShareMessage from %v", pkt.Header.Source)
 
 	election := n.electionStore.Get(dkgMessage.ElectionID)
 	// todo what if node hasn't received ElectionAnnounceMessage yet?
@@ -177,6 +181,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 	}
 
 	// Processing DKGShareValidationMessage
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling DKGShareValidationMessage from %v", pkt.Header.Source)
 
 	election := n.electionStore.Get(dkgShareValidationMessage.ElectionID)
 	// todo what if node hasn't received ElectionAnnounceMessage yet?
@@ -360,12 +365,17 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 	}
 
 	// Processing types.StartElectionMessage
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling StartElectionMessage from %v", pkt.Header.Source)
 
 	election := n.electionStore.Get(startElectionMessage.ElectionID)
 	election.Base.Initiators[pkt.Header.Source] = struct{}{}
+	election.Base.Expiration = startElectionMessage.Expiration
+
+	n.electionStore.Set(election.Base.ElectionID, election) // todo delete dis (store references!!)
 
 	if n.IsElectionStarted(election) {
 		// todo election started, I am allowed to cast a vote
+		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote!")
 	}
 
 	return nil
@@ -404,7 +414,7 @@ func (n *node) ShouldInitiateElection(election types.Election) bool {
 func (n *node) GetMixnetServerInitiatorID(election types.Election) int {
 	for i := 0; i < len(election.Base.MixnetServerInfos); i++ {
 		if election.Base.MixnetServerInfos[i].QualifiedStatus == types.QUALIFIED {
-			return i
+			return i + 1
 		}
 	}
 	return -1
@@ -421,6 +431,7 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 	}
 
 	// Processing ElectionReadyMessage
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling ElectionReadyMessage from %v", pkt.Header.Source)
 
 	// update QualifiedCnt for each mixnet server
 	election := n.electionStore.Get(electionReadyMessage.ElectionID)
@@ -429,8 +440,11 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 	}
 	election.Base.ElectionReadyCnt++
 
+	n.electionStore.Set(election.Base.ElectionID, election) // todo delete dis (store references!!)
+
 	if n.IsElectionStarted(election) {
 		// todo election started, I am allowed to cast a vote
+		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote", pkt.Header.Source)
 	}
 
 	return nil
