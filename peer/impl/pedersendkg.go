@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"crypto/rand"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
@@ -20,7 +19,7 @@ import (
 func (n *node) PedersenDkg(electionID string, mixnetServers []string) {
 	// Choose a random polynomial f(z) over Zq of degree t:
 	// f(z) = a0 + a1*z + ... + at*z^t
-	a := n.GenerateRandomPolynomial()
+	a := GenerateRandomPolynomial(n.conf.PedersenSuite.T, &n.conf.PedersenSuite.Q)
 	X := make([]big.Int, n.conf.PedersenSuite.T+1)
 	for i := 0; i < len(a); i++ {
 		// X[i] = g^a[i]
@@ -43,24 +42,6 @@ func (n *node) PedersenDkg(electionID string, mixnetServers []string) {
 		share := f(i + 1) // IDs of the mixnet server starts from 1
 		n.sendDKGShareMessage(electionID, mixnetServers[i], i, share, X)
 	}
-}
-
-// GenerateRandomPolynomial generates random polynomial of degree t
-// over group Zq. Returns a slice which contains the coefficients of
-// the corresponding polynomial.
-func (n *node) GenerateRandomPolynomial() []big.Int {
-	arr := make([]big.Int, n.conf.PedersenSuite.T+1)
-	for i := 0; i < n.conf.PedersenSuite.T+1; i++ {
-		arr[i] = *n.GenerateRandomBigInt()
-	}
-	return arr
-}
-
-// GenerateRandomBigInt generates a random value in Zq
-func (n *node) GenerateRandomBigInt() *big.Int {
-	//Generate cryptographically strong pseudo-random between 0 - max
-	a, _ := rand.Int(rand.Reader, &n.conf.PedersenSuite.Q)
-	return a
 }
 
 // sendDKGShareMessage creates a new types.DKGShareMessage, wraps it inside a
@@ -330,6 +311,36 @@ func (n *node) sendElectionReadyMessage(election types.Election) {
 	}
 }
 
+// HandleElectionReadyMessage processes types.ElectionReadyMessage. This message
+// can be received by any peer. The peer collects the information about qualified
+// (trusted) mixnet nodes.
+func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packet) error {
+	// cast the message to its actual type. You assume it is the right type.
+	electionReadyMessage, ok := msg.(*types.ElectionReadyMessage)
+	if !ok {
+		return fmt.Errorf("wrong type: %T", msg)
+	}
+
+	// Processing ElectionReadyMessage
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling ElectionReadyMessage from %v", pkt.Header.Source)
+
+	// update QualifiedCnt for each mixnet server
+	election := n.electionStore.Get(electionReadyMessage.ElectionID)
+	for _, qualifiedServerID := range electionReadyMessage.QualifiedServers {
+		election.Base.MixnetServersPoints[qualifiedServerID]++
+	}
+	election.Base.ElectionReadyCnt++
+
+	n.electionStore.Set(election.Base.ElectionID, election) // todo delete dis (store references!!)
+
+	if n.IsElectionStarted(election) {
+		// todo election started, I am allowed to cast a vote
+		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote", pkt.Header.Source)
+	}
+
+	return nil
+}
+
 // InitiateElection sends types.StartElectionMessage indicating that the election
 // has officially started and that the peers are allowed to cast their votes.
 func (n *node) InitiateElection(election types.Election) {
@@ -418,36 +429,6 @@ func (n *node) GetMixnetServerInitiatorID(election types.Election) int {
 		}
 	}
 	return -1
-}
-
-// HandleElectionReadyMessage processes types.ElectionReadyMessage. This message
-// can be received by any peer. The peer collects the information about qualified
-// (trusted) mixnet nodes.
-func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packet) error {
-	// cast the message to its actual type. You assume it is the right type.
-	electionReadyMessage, ok := msg.(*types.ElectionReadyMessage)
-	if !ok {
-		return fmt.Errorf("wrong type: %T", msg)
-	}
-
-	// Processing ElectionReadyMessage
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling ElectionReadyMessage from %v", pkt.Header.Source)
-
-	// update QualifiedCnt for each mixnet server
-	election := n.electionStore.Get(electionReadyMessage.ElectionID)
-	for _, qualifiedServerID := range electionReadyMessage.QualifiedServers {
-		election.Base.MixnetServersPoints[qualifiedServerID]++
-	}
-	election.Base.ElectionReadyCnt++
-
-	n.electionStore.Set(election.Base.ElectionID, election) // todo delete dis (store references!!)
-
-	if n.IsElectionStarted(election) {
-		// todo election started, I am allowed to cast a vote
-		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote", pkt.Header.Source)
-	}
-
-	return nil
 }
 
 // GetQualifiedMixnetServers returns a list of qualified mixnet servers for the corresponding
