@@ -125,6 +125,10 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	// Pedersen DKG
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.DKGShareMessage{}, peer.HandleDKGShareMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.DKGShareValidationMessage{}, peer.HandleDKGShareValidationMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.ElectionReadyMessage{}, peer.HandleElectionReadyMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.DKGRevealShareMessage{}, peer.HandleDKGRevealShareMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.StartElectionMessage{}, peer.HandleStartElectionMessage)
 
 	return &peer
 }
