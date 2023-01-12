@@ -11,9 +11,9 @@ import (
 // Store describes the primitives of a simple storage.
 type ElectionStore interface {
 	// Get returns nil if not found
-	Get(key string) types.Election
+	Get(key string) *types.Election
 
-	Set(key string, val types.Election)
+	Set(key string, val *types.Election)
 
 	StoreVote(key, encryptedChoice string)
 
@@ -23,28 +23,28 @@ type ElectionStore interface {
 
 	Len() int
 
-	GetAll() []types.Election
+	GetAll() []*types.Election
 
 	// Calls the function on each key/value pair. Aborts if the function returns
 	// false.
-	ForEach(func(key string, val types.Election) bool)
+	ForEach(func(key string, val *types.Election) bool)
 }
 
 // Storage implements an in-memory storage.
 func New() ElectionStore {
 	return &store{
-		data: make(map[string]types.Election),
+		data: make(map[string]*types.Election),
 	}
 }
 
 // store implements an in-memory store.
 type store struct {
 	sync.Mutex
-	data map[string]types.Election
+	data map[string]*types.Election
 }
 
 // Get implements storage.Store
-func (s *store) Get(key string) types.Election {
+func (s *store) Get(key string) *types.Election {
 	s.Lock()
 	defer s.Unlock()
 
@@ -61,11 +61,11 @@ func (s *store) Exists(key string) bool {
 }
 
 // Get implements storage.Store
-func (s *store) GetAll() []types.Election {
+func (s *store) GetAll() []*types.Election {
 	s.Lock()
 	defer s.Unlock()
 
-	elections := make([]types.Election, 0)
+	elections := make([]*types.Election, 0)
 
 	for _, election := range s.data {
 		elections = append(elections, election)
@@ -75,11 +75,11 @@ func (s *store) GetAll() []types.Election {
 }
 
 // Set implements storage.Store
-func (s *store) Set(key string, val types.Election) {
+func (s *store) Set(key string, val *types.Election) {
 	s.Lock()
 	defer s.Unlock()
 
-	s.data[string(key)] = val
+	s.data[key] = val
 }
 
 func (s *store) StoreVote(key, vote string) {
@@ -102,7 +102,7 @@ func (s *store) Delete(key string) {
 }
 
 // ForEach implements storage.Store
-func (s *store) ForEach(f func(key string, val types.Election) bool) {
+func (s *store) ForEach(f func(key string, val *types.Election) bool) {
 	s.Lock()
 	defer s.Unlock()
 

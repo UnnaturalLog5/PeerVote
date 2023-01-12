@@ -27,14 +27,11 @@ func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Pack
 		return errors.New("election already exists")
 	}
 
-	//
+	n.electionStore.Set(election.Base.ElectionID, &election)
 	if contains(election.Base.MixnetServers, n.myAddr) {
 		// if node is one of the mixnet servers, it needs to store the data about other mixnet servers
 		election.Base.MixnetServerInfos = make([]types.MixnetServerInfo, len(election.Base.MixnetServers))
-		n.electionStore.Set(election.Base.ElectionID, election)
 		n.PedersenDkg(election.Base.ElectionID, election.Base.MixnetServers)
-	} else {
-		n.electionStore.Set(election.Base.ElectionID, election)
 	}
 
 	return nil

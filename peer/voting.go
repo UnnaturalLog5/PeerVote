@@ -9,7 +9,7 @@ import (
 type Voting interface {
 	AnnounceElection(title, description string, choices, mixnetServers []string, expirationTime time.Duration) (string, error)
 
-	GetElections() []types.Election
+	GetElections() []*types.Election
 
 	Vote(electionID string, choiceID string) error
 

@@ -115,7 +115,6 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 
 	n.sendDKGShareValidationMessage(dkgMessage.ElectionID, election.Base.MixnetServers, dkgMessage.MixnetServerID, isValid)
 
-	// todo update election in the store -> alter election store so it stores *references* to elections instead
 	return nil
 }
 
@@ -203,7 +202,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 }
 
 // sendDKGRevealShareMessage broadcasts types.DKGRevealShareMessage to other mixnet servers
-func (n *node) sendDKGRevealShareMessage(election types.Election, myMixnetServerID int, complainingServerID int) {
+func (n *node) sendDKGRevealShareMessage(election *types.Election, myMixnetServerID int, complainingServerID int) {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending KGRevealShareMessage")
 
 	recipients := make(map[string]struct{})
@@ -287,7 +286,7 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 }
 
 // sendElectionReadyMessage broadcasts types.ElectionReadyMessage
-func (n *node) sendElectionReadyMessage(election types.Election) {
+func (n *node) sendElectionReadyMessage(election *types.Election) {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending ElectionReadyMessage")
 
 	qualifiedServers := n.GetQualifiedMixnetServers(election)
@@ -343,7 +342,7 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 
 // InitiateElection sends types.StartElectionMessage indicating that the election
 // has officially started and that the peers are allowed to cast their votes.
-func (n *node) InitiateElection(election types.Election) {
+func (n *node) InitiateElection(election *types.Election) {
 
 	election.Base.Expiration = time.Now().Add(election.Base.Duration)
 	n.sendStartElectionMessage(election)
@@ -393,7 +392,7 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 }
 
 // sendStartElectionMessage creates a new types.StartElectionMessage, and broadcasts it to all the peers in the network,
-func (n *node) sendStartElectionMessage(election types.Election) {
+func (n *node) sendStartElectionMessage(election *types.Election) {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending StartElectionMessage")
 
 	startElectionMessage := types.StartElectionMessage{
@@ -414,7 +413,7 @@ func (n *node) sendStartElectionMessage(election types.Election) {
 }
 
 // ShouldInitiateElection checks whether mixnet node should start the election
-func (n *node) ShouldInitiateElection(election types.Election) bool {
+func (n *node) ShouldInitiateElection(election *types.Election) bool {
 	myID := n.GetMyMixnetServerID(election)
 	initiatorID := n.GetMixnetServerInitiatorID(election)
 	return myID == initiatorID
@@ -422,7 +421,7 @@ func (n *node) ShouldInitiateElection(election types.Election) bool {
 
 // GetMixnetServerInitiatorID returns the ID of the mixnet node which is responsible for
 // starting the election, that is, the ID of a qualified mixnet node with the lowest ID
-func (n *node) GetMixnetServerInitiatorID(election types.Election) int {
+func (n *node) GetMixnetServerInitiatorID(election *types.Election) int {
 	for i := 0; i < len(election.Base.MixnetServerInfos); i++ {
 		if election.Base.MixnetServerInfos[i].QualifiedStatus == types.QUALIFIED {
 			return i + 1
@@ -433,7 +432,7 @@ func (n *node) GetMixnetServerInitiatorID(election types.Election) int {
 
 // GetQualifiedMixnetServers returns a list of qualified mixnet servers for the corresponding
 // election.
-func (n *node) GetQualifiedMixnetServers(election types.Election) []int {
+func (n *node) GetQualifiedMixnetServers(election *types.Election) []int {
 	qualifiedServers := make([]int, 0)
 	for i := 0; i < len(election.Base.MixnetServers); i++ {
 		if election.Base.MixnetServerInfos[i].QualifiedStatus == types.QUALIFIED {
@@ -446,7 +445,7 @@ func (n *node) GetQualifiedMixnetServers(election types.Election) []int {
 // ShouldSendElectionReadyMessage checks whether types.ElectionReadyMessage should be sent.
 // types.ElectionReadyMessage should be sent only if all the mixnet servers have a decided status
 // (types.QUALIFIED or types.DISQUALIFIED)
-func (n *node) ShouldSendElectionReadyMessage(election types.Election) bool {
+func (n *node) ShouldSendElectionReadyMessage(election *types.Election) bool {
 	for _, mixnetServerInfo := range election.Base.MixnetServerInfos {
 		if mixnetServerInfo.QualifiedStatus == types.NOT_DECIDED_YET {
 			return false
@@ -481,7 +480,7 @@ func (n *node) ReconstructPublicKey(election types.Election) *big.Int {
 }
 
 // GetMyMixnetServerID returns the ID of the node within mixnet servers
-func (n *node) GetMyMixnetServerID(election types.Election) int {
+func (n *node) GetMyMixnetServerID(election *types.Election) int {
 	for i, addr := range election.Base.MixnetServers {
 		if addr == n.myAddr {
 			return i + 1

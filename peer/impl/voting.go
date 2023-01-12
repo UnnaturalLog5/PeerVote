@@ -56,7 +56,7 @@ func (n *node) AnnounceElection(title, description string, choices, mixnetServer
 	return electionID, nil
 }
 
-func (n *node) GetElections() []types.Election {
+func (n *node) GetElections() []*types.Election {
 	elections := n.electionStore.GetAll()
 
 	return elections
