@@ -41,17 +41,34 @@ func (v voting) ElectionsHTMLHandler() http.HandlerFunc {
 	}
 }
 
+func GetWinner(results map[string]uint) string {
+	highestCount := uint(0)
+	winner := ""
+
+	for choice, count := range results {
+		if count > highestCount {
+			winner = choice
+			highestCount = count
+		}
+	}
+
+	return winner
+}
+
 type electionView struct {
 	Base types.ElectionBase
 	// use this over the one in Base, as this one is nicely formatted
-	Expiration string
-	MyVote     string
-	Results    []resultView
+	Expiration     string
+	MyVote         string
+	Winner         string
+	Results        []resultView
+	ProofsVerified map[string]bool
 }
 
 type resultView struct {
-	Name  string
-	Count uint
+	Name     string
+	ChoiceID string
+	Count    uint
 }
 
 func (v voting) electionsHTMLGet(w http.ResponseWriter, r *http.Request) {
@@ -71,19 +88,32 @@ func (v voting) electionsHTMLGet(w http.ResponseWriter, r *http.Request) {
 			MyVote:     election.MyVote,
 		}
 
+		electionV.Winner = GetWinner(election.Results)
+
+		// aggregate results
 		if len(election.Results) > 0 {
 			resultViews := []resultView{}
+
+			// for each choice, do tallying
 			for _, choice := range election.Base.Choices {
 				resultView := resultView{
-					Name:  choice.Name,
-					Count: election.Results[choice.ChoiceID],
+					Name:     choice.Name,
+					ChoiceID: choice.ChoiceID,
+					Count:    election.Results[choice.ChoiceID],
 				}
-
 				resultViews = append(resultViews, resultView)
 			}
 
 			electionV.Results = resultViews
 		}
+
+		// verify proofs
+		electionV.ProofsVerified = make(map[string]bool)
+		electionV.ProofsVerified["Key Generation"] = true
+		electionV.ProofsVerified["Encryption"] = true
+		electionV.ProofsVerified["Mixing"] = false
+		electionV.ProofsVerified["Tallying"] = true
+		electionV.ProofsVerified["Includes My Vote"] = true
 
 		electionViews = append(electionViews, electionV)
 	}

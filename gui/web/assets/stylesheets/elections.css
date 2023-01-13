@@ -51,10 +51,42 @@ div.startelectionform input, div.startelectionform select {
 
 div.elections div.grid {
     display: grid;
-    grid-gap: 8px;
+    grid-gap: 4px;
     grid-template-columns: 1fr 2fr;
+}
+
+div.elections div.grid > * {
+    padding: 2px;
+}
+
+div.elections button {
+    min-height: 30px;
+    vertical-align: middle;
 }
 
 div.elections .full-grid-width {
     grid-column: 1 / -1;
+}
+
+div.elections div.winner {
+    background: #B4CFB8;
+}
+
+div.elections div.correct {
+    color: #87B38D;
+}
+
+div.elections div.incorrect {
+    color: #8C1C13;
+}
+
+div.elections .spinner {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% {
+        transform: rotate(360deg);
+    }
 }

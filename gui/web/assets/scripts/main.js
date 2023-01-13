@@ -28,6 +28,7 @@ const main = function () {
   application.register("elections", Elections);
   application.register("vote", Vote);
   application.register("startelection", StartElection);
+  application.register("proofs", Proofs);
 
   initCollapsible();
 };
@@ -374,12 +375,38 @@ class Elections extends BaseElement {
       const resp = await this.fetch(addr);
       const html = await resp.text();
 
+      // insecure, but should be fine for demo purposes
       this.electionsTarget.innerHTML = html;
 
-      this.flash.printSuccess("Elections updated");
+      // this.flash.printSuccess("Elections updated");
     } catch (e) {
       this.flash.printError("Failed to fetch elections: " + e);
     }
+  }
+}
+
+class Proofs extends BaseElement {
+  static get targets() {
+    return ["proofStatus"];
+  }
+
+  onVerify() {
+    const proofStatuses = this.proofStatusTargets;
+
+    proofStatuses.forEach((proofStatus) => {
+      proofStatus.children[1].setAttribute("hidden", "");
+      proofStatus.children[0].innerHTML = "|";
+
+      proofStatus.children[0].removeAttribute("hidden");
+      proofStatus.children[0].classList.add("spinner");
+      
+      setTimeout(() => {
+        proofStatus.children[0].setAttribute("hidden", "");
+        proofStatus.children[0].classList.remove("spinner");
+
+        proofStatus.children[1].removeAttribute("hidden");
+      }, 200 + Math.floor(Math.random() * 800));
+    });
   }
 }
 

@@ -1,10 +1,44 @@
 {{ define "votesResults" }}
-<div class="grid">
-    <div>Choice</div><div>Result</div>
-    {{ range $result := .Results }}
-    <div>{{ $result.Name }}:</div>
-    <div>{{ $result.Count }}</div>
-    {{ end }}
+<div>
+    <div class="grid">
+        <div>Choice</div>
+        <div>Result</div>
+        {{ $myVote := .MyVote }}
+        {{ $winner := .Winner }}
+        {{ range $result := .Results }}
+        <div {{ if eq ($winner) ($result.ChoiceID) }} class="winner" {{ end }}>
+            {{ $result.Name }}{{ if eq ($myVote) ($result.ChoiceID) }} * {{ end }}
+        </div>
+        <div>
+            {{ $result.Count }}
+        </div>
+        {{ end }}
+    </div>
+    <div data-controller="proofs">
+        <h4>Proof of Correctness</h4>
+        <div>
+            <div class="grid">
+                {{ range $proof, $status := .ProofsVerified }}
+                <div>{{ $proof }}</div>
+                <div data-proofs-target="proofStatus">
+                    <div>
+                        <span>?</span>
+                    </div>
+                    <div hidden>
+                        {{ if eq $status true }}
+                        <div class="correct">Correct</div>
+                        {{ else }}
+                        <div class="incorrect">Error - Possibly corrupted election!</div>
+                        {{ end }}
+                    </div>
+                </div>
+                {{ end }}
+                <button class="full-grid-width" data-action="click->proofs#onVerify">
+                    Verify
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 {{ end }}
 
@@ -53,7 +87,13 @@
         <div><span>Open until</span></div>
         <div><span class="expiration">{{ $election.Expiration }}</span></div>
 
-        <div><span>Choices</span></div>
+        <div>
+            <span>Choices</span>
+            <br />
+            <span style="font-size:small">* my vote</span>
+            <br />
+            <span style="font-size:small">** winner</span>
+        </div>
         <div>
             {{ if $election.Results }}
             {{ template "votesResults" $election }}

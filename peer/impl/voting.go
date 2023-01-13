@@ -145,17 +145,3 @@ func (n *node) Tally(electionID string, votes []string) {
 		log.Err(err).Str("peerAddr", n.myAddr).Msgf("error broadcasting election results")
 	}
 }
-
-func GetWinner(results map[string]uint) string {
-	highestCount := uint(0)
-	winner := ""
-
-	for choice, count := range results {
-		if count > highestCount {
-			winner = choice
-			highestCount = count
-		}
-	}
-
-	return winner
-}
