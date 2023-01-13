@@ -15,7 +15,7 @@ type ElectionBase struct {
 	Duration            time.Duration
 	Expiration          time.Time
 	MixnetServers       []string
-	MixnetServerInfos   []MixnetServerInfo
+	MixnetServerInfos   []*MixnetServerInfo
 	MixnetServersPoints []int // Incremented when mixnet server is among qualified nodes in types.ElectionReadyMessage
 	ElectionReadyCnt    int
 	Initiators          map[string]struct{}

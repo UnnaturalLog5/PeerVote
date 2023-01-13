@@ -11,6 +11,8 @@ import (
 )
 
 func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Packet) error {
+	n.dkgMutex.Lock()
+
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling AnnounceElectionMessage from %v", pkt.Header.Source)
 
 	announceElectionMessage := types.AnnounceElectionMessage{}
@@ -28,9 +30,14 @@ func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Pack
 	}
 
 	n.electionStore.Set(election.Base.ElectionID, &election)
+
+	n.notfify.Notify(election.Base.ElectionID)
+
+	n.dkgMutex.Unlock()
+
 	if contains(election.Base.MixnetServers, n.myAddr) {
 		// if node is one of the mixnet servers, it needs to store the data about other mixnet servers
-		election.Base.MixnetServerInfos = make([]types.MixnetServerInfo, len(election.Base.MixnetServers))
+		election.Base.MixnetServerInfos = make([]*types.MixnetServerInfo, len(election.Base.MixnetServers))
 		n.PedersenDkg(election.Base.ElectionID, election.Base.MixnetServers)
 	}
 

@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
@@ -25,6 +26,7 @@ func (n *node) PedersenDkg(electionID string, mixnetServers []string) {
 		// X[i] = g^a[i]
 		X[i].Exp(&n.conf.PedersenSuite.G, &a[i], &n.conf.PedersenSuite.P)
 	}
+
 	f := func(id int) big.Int {
 		base := big.NewInt(int64(id))
 		sum := a[0]
@@ -86,12 +88,23 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 		return fmt.Errorf("wrong type: %T", msg)
 	}
 
+	n.dkgMutex.Lock()
+
 	// Processing DKGShareMessage
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling DKGShareMessage from %v", pkt.Header.Source)
 
 	election := n.electionStore.Get(dkgMessage.ElectionID)
-	// todo what if node hasn't received ElectionAnnounceMessage yet?
-	// add some kind of synchronization
+	if election == nil {
+		timeout := time.Second * 10
+		n.notfify.RegisterTimer(dkgMessage.ElectionID, timeout)
+		n.dkgMutex.Unlock()
+		_, ok := n.notfify.Wait(dkgMessage.ElectionID, timeout)
+		if !ok {
+			return errors.New("received DKGShareMessage before AnnounceElectionMessage")
+		}
+		n.dkgMutex.Lock()
+		election = n.electionStore.Get(dkgMessage.ElectionID)
+	}
 
 	mixnetServers := election.Base.MixnetServers
 
@@ -101,14 +114,25 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 	}
 
 	// store info about mixnetserver
-	// todo what if I already received a Complaint message for example?
-	election.Base.MixnetServerInfos[dkgMessage.MixnetServerID] = types.MixnetServerInfo{
-		ReceivedShare:   dkgMessage.Share,
-		X:               dkgMessage.X,
-		VerifiedCnt:     0,
-		ComplainedCnt:   0,
-		QualifiedStatus: types.NOT_DECIDED_YET,
+	if election.Base.MixnetServerInfos[dkgMessage.MixnetServerID] == nil {
+		election.Base.MixnetServerInfos[dkgMessage.MixnetServerID] = &types.MixnetServerInfo{
+			ReceivedShare:   dkgMessage.Share,
+			X:               dkgMessage.X,
+			VerifiedCnt:     0,
+			ComplainedCnt:   0,
+			QualifiedStatus: types.NOT_DECIDED_YET,
+		}
+	} else {
+		if election.Base.MixnetServerInfos[dkgMessage.MixnetServerID].QualifiedStatus != types.NOT_DECIDED_YET {
+			n.dkgMutex.Unlock()
+			return nil
+		} else {
+			election.Base.MixnetServerInfos[dkgMessage.MixnetServerID].ReceivedShare = dkgMessage.Share
+			election.Base.MixnetServerInfos[dkgMessage.MixnetServerID].X = dkgMessage.X
+		}
 	}
+
+	n.dkgMutex.Unlock()
 
 	myMixnetID := big.NewInt(int64(n.GetMyMixnetServerID(election)))
 	isValid := n.VerifyEquation(myMixnetID, &dkgMessage.Share, dkgMessage.X)
@@ -160,12 +184,22 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 		return fmt.Errorf("wrong type: %T", msg)
 	}
 
+	n.dkgMutex.Lock()
 	// Processing DKGShareValidationMessage
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling DKGShareValidationMessage from %v", pkt.Header.Source)
 
 	election := n.electionStore.Get(dkgShareValidationMessage.ElectionID)
-	// todo what if node hasn't received ElectionAnnounceMessage yet?
-	// add some kind of synchronization
+	if election == nil {
+		timeout := time.Second * 10
+		n.notfify.RegisterTimer(dkgShareValidationMessage.ElectionID, timeout)
+		n.dkgMutex.Unlock()
+		_, ok := n.notfify.Wait(dkgShareValidationMessage.ElectionID, timeout)
+		if !ok {
+			return errors.New("received DKGShareValidationMessage before AnnounceElectionMessage")
+		}
+		n.dkgMutex.Lock()
+		election = n.electionStore.Get(dkgShareValidationMessage.ElectionID)
+	}
 
 	mixnetServers := election.Base.MixnetServers
 
@@ -174,30 +208,49 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 			" but the node is not one of the mixnetServers", dkgShareValidationMessage.ElectionID)
 	}
 
+	mixnetServerInfo := election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID]
+	if mixnetServerInfo == nil {
+		mixnetServerInfo = &types.MixnetServerInfo{
+			ReceivedShare:   big.Int{},
+			X:               make([]big.Int, len(election.Base.MixnetServers)),
+			VerifiedCnt:     0,
+			ComplainedCnt:   0,
+			QualifiedStatus: types.NOT_DECIDED_YET,
+		}
+		election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID] = mixnetServerInfo
+	}
+
 	if dkgShareValidationMessage.IsShareValid {
-		election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].VerifiedCnt++
-		if election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].VerifiedCnt == len(election.Base.MixnetServers) {
-			election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].QualifiedStatus = types.QUALIFIED
+		mixnetServerInfo.VerifiedCnt++
+		if mixnetServerInfo.VerifiedCnt == len(election.Base.MixnetServers) {
+			mixnetServerInfo.QualifiedStatus = types.QUALIFIED
 			if n.ShouldSendElectionReadyMessage(election) {
+				n.dkgMutex.Unlock()
 				n.sendElectionReadyMessage(election)
+				return nil
 			}
 		}
 	} else {
-		election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].ComplainedCnt++
-		if election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].ComplainedCnt > n.conf.PedersenSuite.T {
-			election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
-			election.Base.MixnetServerInfos[dkgShareValidationMessage.MixnetServerID].X[0] = *big.NewInt(1)
+		mixnetServerInfo.ComplainedCnt++
+		if mixnetServerInfo.ComplainedCnt > n.conf.PedersenSuite.T {
+			mixnetServerInfo.QualifiedStatus = types.DISQUALIFIED
+			mixnetServerInfo.X[0] = *big.NewInt(1)
 			if n.ShouldSendElectionReadyMessage(election) {
+				n.dkgMutex.Unlock()
 				n.sendElectionReadyMessage(election)
+				return nil
 			}
 		} else {
 			myMixnetServerID := n.GetMyMixnetServerID(election)
 			if myMixnetServerID == dkgShareValidationMessage.MixnetServerID {
+				n.dkgMutex.Unlock()
 				n.sendDKGRevealShareMessage(election, myMixnetServerID, dkgShareValidationMessage.MixnetServerID)
+				return nil
 			}
 		}
 	}
 
+	n.dkgMutex.Unlock()
 	return nil
 }
 
@@ -321,23 +374,102 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 	}
 
 	// Processing ElectionReadyMessage
+	n.dkgMutex.Lock()
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling ElectionReadyMessage from %v", pkt.Header.Source)
 
 	// update QualifiedCnt for each mixnet server
 	election := n.electionStore.Get(electionReadyMessage.ElectionID)
+	if election == nil {
+		timeout := time.Second * 10
+		n.notfify.RegisterTimer(electionReadyMessage.ElectionID, timeout)
+		n.dkgMutex.Unlock()
+		_, ok := n.notfify.Wait(electionReadyMessage.ElectionID, timeout)
+		if !ok {
+			return errors.New("received ElectionReadyMessage before AnnounceElectionMessage")
+		}
+		n.dkgMutex.Lock()
+		election = n.electionStore.Get(electionReadyMessage.ElectionID)
+	}
+
 	for _, qualifiedServerID := range electionReadyMessage.QualifiedServers {
 		election.Base.MixnetServersPoints[qualifiedServerID]++
 	}
 	election.Base.ElectionReadyCnt++
 
-	n.electionStore.Set(election.Base.ElectionID, election) // todo delete dis (store references!!)
+	if n.IsElectionStarted(election) {
+		// todo election started, I am allowed to cast a vote
+		// todo display some kind of a message on frontend
+		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote", pkt.Header.Source)
+	}
+	n.dkgMutex.Unlock()
+	return nil
+}
+
+// sendStartElectionMessage creates a new types.StartElectionMessage, and broadcasts it to all the peers in the network,
+func (n *node) sendStartElectionMessage(election *types.Election) {
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending StartElectionMessage")
+
+	startElectionMessage := types.StartElectionMessage{
+		ElectionID: election.Base.ElectionID,
+		Expiration: election.Base.Expiration,
+	}
+
+	msg, err := marshalMessage(&startElectionMessage)
+
+	if err != nil {
+		return
+	}
+
+	err = n.Broadcast(msg)
+	if err != nil {
+		return
+	}
+}
+
+// HandleStartElectionMessage processes types.StartElectionMessage. This message
+// can be received by any peer. The peer learns that the election can officially start.
+func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packet) error {
+	// cast the message to its actual type. You assume it is the right type.
+	startElectionMessage, ok := msg.(*types.StartElectionMessage)
+	if !ok {
+		return fmt.Errorf("wrong type: %T", msg)
+	}
+
+	// Processing types.StartElectionMessage
+	n.dkgMutex.Lock()
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling StartElectionMessage from %v", pkt.Header.Source)
+
+	election := n.electionStore.Get(startElectionMessage.ElectionID)
+	if election == nil {
+		timeout := time.Second * 10
+		n.notfify.RegisterTimer(startElectionMessage.ElectionID, timeout)
+		n.dkgMutex.Unlock()
+		_, ok := n.notfify.Wait(startElectionMessage.ElectionID, timeout)
+		if !ok {
+			return errors.New("received StartElectionMessage before AnnounceElectionMessage")
+		}
+		n.dkgMutex.Lock()
+		election = n.electionStore.Get(startElectionMessage.ElectionID)
+	}
+
+	election.Base.Initiators[pkt.Header.Source] = struct{}{}
+	election.Base.Expiration = startElectionMessage.Expiration
 
 	if n.IsElectionStarted(election) {
 		// todo election started, I am allowed to cast a vote
-		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote", pkt.Header.Source)
+		// todo display some kind of a message on frontend
+		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote!")
 	}
 
+	n.dkgMutex.Unlock()
 	return nil
+}
+
+// ShouldInitiateElection checks whether mixnet node should start the election
+func (n *node) ShouldInitiateElection(election *types.Election) bool {
+	myID := n.GetMyMixnetServerID(election)
+	initiatorID := n.GetMixnetServerInitiatorID(election)
+	return myID == initiatorID
 }
 
 // InitiateElection sends types.StartElectionMessage indicating that the election
@@ -363,60 +495,6 @@ func (n *node) InitiateElection(election *types.Election) {
 		log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting tallying")
 		n.Tally(election.Base.ElectionID)
 	}()
-}
-
-// HandleStartElectionMessage processes types.StartElectionMessage. This message
-// can be received by any peer. The peer learns that the election can officially start.
-func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packet) error {
-	// cast the message to its actual type. You assume it is the right type.
-	startElectionMessage, ok := msg.(*types.StartElectionMessage)
-	if !ok {
-		return fmt.Errorf("wrong type: %T", msg)
-	}
-
-	// Processing types.StartElectionMessage
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling StartElectionMessage from %v", pkt.Header.Source)
-
-	election := n.electionStore.Get(startElectionMessage.ElectionID)
-	election.Base.Initiators[pkt.Header.Source] = struct{}{}
-	election.Base.Expiration = startElectionMessage.Expiration
-
-	n.electionStore.Set(election.Base.ElectionID, election) // todo delete dis (store references!!)
-
-	if n.IsElectionStarted(election) {
-		// todo election started, I am allowed to cast a vote
-		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote!")
-	}
-
-	return nil
-}
-
-// sendStartElectionMessage creates a new types.StartElectionMessage, and broadcasts it to all the peers in the network,
-func (n *node) sendStartElectionMessage(election *types.Election) {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("sending StartElectionMessage")
-
-	startElectionMessage := types.StartElectionMessage{
-		ElectionID: election.Base.ElectionID,
-		Expiration: election.Base.Expiration,
-	}
-
-	msg, err := marshalMessage(&startElectionMessage)
-
-	if err != nil {
-		return
-	}
-
-	err = n.Broadcast(msg)
-	if err != nil {
-		return
-	}
-}
-
-// ShouldInitiateElection checks whether mixnet node should start the election
-func (n *node) ShouldInitiateElection(election *types.Election) bool {
-	myID := n.GetMyMixnetServerID(election)
-	initiatorID := n.GetMixnetServerInitiatorID(election)
-	return myID == initiatorID
 }
 
 // GetMixnetServerInitiatorID returns the ID of the mixnet node which is responsible for
@@ -487,4 +565,26 @@ func (n *node) GetMyMixnetServerID(election *types.Election) int {
 		}
 	}
 	return -1
+}
+
+// IsElectionStarted checks if the election started (that is, one of the trusted mixnet
+// servers initiated the election and the peer is allowed to cast a vote)
+func (n *node) IsElectionStarted(election *types.Election) bool {
+	if election.Base.ElectionReadyCnt != len(election.Base.MixnetServers) {
+		return false
+	}
+	initiator := n.GetFirstQualifiedInitiator(election)
+	_, exists := election.Base.Initiators[initiator]
+	return exists
+}
+
+// GetFirstQualifiedInitiator returns the ID of the mixnet server which is responsible for
+// initiating the election
+func (n *node) GetFirstQualifiedInitiator(election *types.Election) string {
+	for i := 0; i < len(election.Base.MixnetServersPoints); i++ {
+		if election.Base.MixnetServersPoints[i] > n.conf.PedersenSuite.T {
+			return election.Base.MixnetServers[i]
+		}
+	}
+	return ""
 }
