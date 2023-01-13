@@ -28,7 +28,7 @@ var DefaultPedersenSuite = PedersenSuite{
 	P: *big.NewInt(7), // Z*7
 	G: *big.NewInt(2), // <2>
 	Q: *big.NewInt(3), // <2> = {2, 4, 1}
-	T: 0,
+	T: 1,
 }
 
 type DKGShareMessage struct {

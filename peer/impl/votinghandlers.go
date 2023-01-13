@@ -38,7 +38,7 @@ func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Pack
 	if contains(election.Base.MixnetServers, n.myAddr) {
 		// if node is one of the mixnet servers, it needs to store the data about other mixnet servers
 		election.Base.MixnetServerInfos = make([]*types.MixnetServerInfo, len(election.Base.MixnetServers))
-		n.PedersenDkg(election.Base.ElectionID, election.Base.MixnetServers)
+		n.PedersenDkg(&election)
 	}
 
 	return nil
@@ -55,9 +55,6 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 	election := n.electionStore.Get(voteMessage.ElectionID)
 
 	// accept if not expired
-	println(time.Now().Format(time.RFC3339))
-	println(election.Base.Expiration.Format(time.RFC3339))
-
 	if !time.Now().Before(election.Base.Expiration) {
 		return errors.New("this election expired - vote won't be accepted")
 	}

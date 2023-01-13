@@ -17,7 +17,7 @@ import (
 // Threshold Cryptography, Secure Applications of Pedersen’s Distributed
 // Key Generation Protocol (Rosario Gennaro, Stanislaw Jarecki,
 // Hugo Krawczyk, and Tal Rabin)
-func (n *node) PedersenDkg(electionID string, mixnetServers []string) {
+func (n *node) PedersenDkg(election *types.Election) {
 	// Choose a random polynomial f(z) over Zq of degree t:
 	// f(z) = a0 + a1*z + ... + at*z^t
 	a := GenerateRandomPolynomial(n.conf.PedersenSuite.T, &n.conf.PedersenSuite.Q)
@@ -38,11 +38,11 @@ func (n *node) PedersenDkg(electionID string, mixnetServers []string) {
 		}
 		return *new(big.Int).Mod(&sum, &n.conf.PedersenSuite.Q)
 	}
-
+	myMixnetServerID := n.GetMyMixnetServerID(election)
 	// Compute the share xij and send it to each mixnetServer
-	for i := 0; i < len(mixnetServers); i++ {
+	for i := 0; i < len(election.Base.MixnetServers); i++ {
 		share := f(i + 1) // IDs of the mixnet server starts from 1
-		n.sendDKGShareMessage(electionID, mixnetServers[i], i, share, X)
+		n.sendDKGShareMessage(election.Base.ElectionID, election.Base.MixnetServers[i], myMixnetServerID, share, X)
 	}
 }
 
@@ -62,6 +62,7 @@ func (n *node) sendDKGShareMessage(electionID string, mixnetServer string, mixne
 		Share:          share,
 		X:              X,
 	}
+
 	dkgShareTransportMessage, err := marshalMessage(&dkgShareMessage)
 
 	privateMessage := types.PrivateMessage{
@@ -75,6 +76,7 @@ func (n *node) sendDKGShareMessage(electionID string, mixnetServer string, mixne
 	}
 
 	err = n.Broadcast(msg)
+
 	if err != nil {
 		return
 	}
@@ -134,7 +136,7 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 
 	n.dkgMutex.Unlock()
 
-	myMixnetID := big.NewInt(int64(n.GetMyMixnetServerID(election)))
+	myMixnetID := big.NewInt(int64(n.GetMyMixnetServerID(election) + 1))
 	isValid := n.VerifyEquation(myMixnetID, &dkgMessage.Share, dkgMessage.X)
 
 	n.sendDKGShareValidationMessage(dkgMessage.ElectionID, election.Base.MixnetServers, dkgMessage.MixnetServerID, isValid)
@@ -145,7 +147,6 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 // sendDKGShareValidationMessage creates a new types.DKGShareValidationMessage, wraps it inside a
 // types.PrivateMessage and sends it secretly to other mixnet servers
 func (n *node) sendDKGShareValidationMessage(electionID string, mixnetServers []string, mixnetServerID int, isShareValid bool) {
-
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKG Share Validation Message")
 
 	recipients := make(map[string]struct{})
@@ -158,6 +159,7 @@ func (n *node) sendDKGShareValidationMessage(electionID string, mixnetServers []
 		MixnetServerID: mixnetServerID,
 		IsShareValid:   isShareValid,
 	}
+
 	dkgShareValidationTransportMessage, err := marshalMessage(&dkgShareValidationMessage)
 
 	privateMessage := types.PrivateMessage{
@@ -260,7 +262,9 @@ func (n *node) sendDKGRevealShareMessage(election *types.Election, myMixnetServe
 
 	recipients := make(map[string]struct{})
 	for _, mixnetServer := range election.Base.MixnetServers {
-		recipients[mixnetServer] = struct{}{}
+		if mixnetServer != n.myAddr {
+			recipients[mixnetServer] = struct{}{}
+		}
 	}
 
 	dkgRevealShareMessage := types.DKGRevealShareMessage{
@@ -502,7 +506,7 @@ func (n *node) InitiateElection(election *types.Election) {
 func (n *node) GetMixnetServerInitiatorID(election *types.Election) int {
 	for i := 0; i < len(election.Base.MixnetServerInfos); i++ {
 		if election.Base.MixnetServerInfos[i].QualifiedStatus == types.QUALIFIED {
-			return i + 1
+			return i
 		}
 	}
 	return -1
@@ -561,7 +565,7 @@ func (n *node) ReconstructPublicKey(election types.Election) *big.Int {
 func (n *node) GetMyMixnetServerID(election *types.Election) int {
 	for i, addr := range election.Base.MixnetServers {
 		if addr == n.myAddr {
-			return i + 1
+			return i
 		}
 	}
 	return -1
