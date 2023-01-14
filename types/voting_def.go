@@ -22,14 +22,21 @@ type ElectionBase struct {
 	Threshold           int
 	ElectionReadyCnt    int
 	Initiators          map[string]Point
+
+	VotesPermutation []uint32
 }
 
 type Election struct {
 	Base   ElectionBase
-	MyVote string
+	MyVote int
 	// choiceID -> count
 	Results map[string]uint
-	Votes   []string
+	Votes   []ElGamalCipherText
+}
+
+type ElGamalCipherText struct {
+	Ct1 Point
+	Ct2 Point
 }
 
 // GetMyMixnetServerID returns the ID of the node within mixnet servers
@@ -64,6 +71,21 @@ func (election *Election) GetFirstQualifiedInitiator() string {
 	return ""
 }
 
+// GetPublicKey returns the election public key from one of the qualified mixnet servers
+func (election *Election) GetPublicKey() Point {
+	return election.Base.Initiators[election.GetFirstQualifiedInitiator()]
+}
+
+// GetNextMixHop returns the ID of the next mixnet node for mixing
+func (election *Election) GetNextMixHop(hop uint) uint {
+	for i := hop + 1; i < uint(len(election.Base.MixnetServersPoints)); i++ {
+		if election.Base.MixnetServersPoints[i] >= election.Base.Threshold {
+			return i
+		}
+	}
+	return -1
+}
+
 type Choice struct {
 	ChoiceID string
 	Name     string
@@ -74,16 +96,19 @@ type AnnounceElectionMessage struct {
 }
 
 type VoteMessage struct {
-	ElectionID string
-	ChoiceID   string
+	ElectionID    string
+	EncryptedVote ElGamalCipherText
 	// Proof
 }
 
 type MixMessage struct {
 	ElectionID string
-	Votes      []string
+	Votes      []ElGamalCipherText
 	NextHop    uint
+
 	// Proofs
+	ShuffleProofs []ShuffleProof
+	// ReencryptionProof Proof
 }
 
 type ResultMessage struct {

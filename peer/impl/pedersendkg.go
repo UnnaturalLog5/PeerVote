@@ -506,7 +506,7 @@ func (n *node) InitiateElection(election *types.Election) {
 		// mix and forward
 		log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting mixing")
 		// send to ourselves a MixMessage (hop 0) so we can bootstrap the mixing process
-		n.Mix(election.Base.ElectionID, 0)
+		n.Mix(election.Base.ElectionID, INITIAL_MIX_HOP, make([]types.ShuffleProof, 0))
 	}()
 }
 
@@ -565,6 +565,5 @@ func (n *node) ReconstructPublicKey(election *types.Election) types.Point {
 		productValX, productValY = elliptic.P256().Add(server.X[0].X, server.X[0].Y, productValX, productValY)
 	}
 
-	//
 	return NewPoint(productValX, productValY)
 }

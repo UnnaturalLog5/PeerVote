@@ -22,7 +22,8 @@ func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Pack
 	}
 
 	election := types.Election{
-		Base: announceElectionMessage.Base,
+		Base:   announceElectionMessage.Base,
+		MyVote: -1,
 	}
 
 	if n.electionStore.Exists(election.Base.ElectionID) {
@@ -59,7 +60,7 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 		return errors.New("this election expired - vote won't be accepted")
 	}
 
-	n.electionStore.StoreVote(election.Base.ElectionID, voteMessage.ChoiceID)
+	n.electionStore.StoreVote(election.Base.ElectionID, voteMessage.EncryptedVote)
 
 	return nil
 }
@@ -76,7 +77,16 @@ func (n *node) HandleMixMessage(t types.Message, pkt transport.Packet) error {
 	election.Votes = mixMessage.Votes
 	n.electionStore.Set(mixMessage.ElectionID, election)
 
-	err = n.Mix(mixMessage.ElectionID, mixMessage.NextHop)
+	isValid := true
+	for _, shuffleProof := range mixMessage.ShuffleProofs {
+		isValid = isValid && VerifyShuffle(&shuffleProof)
+	}
+
+	if !isValid {
+		return errors.New("shuffle proof is not valid")
+	}
+
+	err = n.Mix(mixMessage.ElectionID, mixMessage.NextHop, mixMessage.ShuffleProofs)
 	if err != nil {
 		return err
 	}

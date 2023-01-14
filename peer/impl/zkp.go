@@ -14,9 +14,8 @@ import (
 	cryptorand "crypto/rand"
 	"fmt"
 	"go.dedis.ch/cs438/types"
-	"math/big"
-
 	"golang.org/x/xerrors"
+	"math/big"
 )
 
 const (
@@ -29,67 +28,6 @@ const (
 
 type Value []byte
 
-type Proof struct {
-	proofType        string
-	curve            elliptic.Curve
-	bPointOther      []byte //basePointOther (for equality proof)
-	pPoint           []byte //publicPoint
-	pPointOther      []byte //publicPointOther (for equality proof)
-	cPoint           []byte //commitPoint
-	cPointOther      []byte //commitPointOhter (for equality proof)
-	verifierChall    []byte //verifier's issued public coins
-	proverChall      []byte //prover's derived public coins for the first statement
-	proverChallOther []byte //prover's derived public coins for the second statement
-	result           big.Int
-	resultOther      big.Int
-}
-
-type ShuffleInstance struct {
-	Curve    elliptic.Curve
-	pPoint   types.Point
-	ctBefore []ElGamalCipherText
-	ctAfter  []ElGamalCipherText
-}
-
-type ShuffleWitness struct {
-	PermList    []uint32
-	RscalarList []big.Int
-}
-
-type ShuffleProof struct {
-	ProofType          string
-	instance           ShuffleInstance
-	verifierChallList  [][]byte
-	tPoint             []byte
-	vPoint             []byte
-	wPoint             []byte
-	uPoint             []byte
-	uPointListBytes    [][]byte
-	gPrimePoint        []byte
-	mPrimePoint        []byte
-	tCapPointListBytes [][]byte
-	vCapPointListBytes [][]byte
-	vCapPoint          []byte
-	wCapPointListBytes [][]byte
-	wCapPoint          []byte
-	sZeroScalar        big.Int
-	sList              []*big.Int
-	dScalar            big.Int
-}
-
-type ElGamalCipherText struct {
-	ct1 types.Point
-	ct2 types.Point
-}
-
-func (ct *ElGamalCipherText) GetCt1() types.Point {
-	return ct.ct1
-}
-
-func (ct *ElGamalCipherText) GetCt2() types.Point {
-	return ct.ct2
-}
-
 func NewPoint(px, py *big.Int) types.Point {
 	return types.Point{
 		X: px,
@@ -97,41 +35,41 @@ func NewPoint(px, py *big.Int) types.Point {
 	}
 }
 
-func NewProof(proofType string) Proof {
-	return Proof{
-		proofType: proofType,
+func NewProof(proofType string) types.Proof {
+	return types.Proof{
+		ProofType: proofType,
 	}
 }
 
-func NewProofExtended(proofType string, curve elliptic.Curve, pPoint, cPoint, challBytes []byte, result *big.Int) *Proof {
-	return &Proof{
-		proofType:     proofType,
-		curve:         curve,
-		pPoint:        pPoint,
-		cPoint:        cPoint,
-		verifierChall: challBytes,
-		result:        *result,
+func NewProofExtended(proofType string, curve elliptic.Curve, pPoint, cPoint, challBytes []byte, result *big.Int) *types.Proof {
+	return &types.Proof{
+		ProofType:     proofType,
+		Curve:         curve,
+		PPoint:        pPoint,
+		CPoint:        cPoint,
+		VerifierChall: challBytes,
+		Result:        *result,
 	}
 }
 
-func NewShuffleInstance(curve elliptic.Curve, pPoint types.Point, ctBefore, ctAfter []ElGamalCipherText) *ShuffleInstance {
-	return &ShuffleInstance{
+func NewShuffleInstance(curve elliptic.Curve, pPoint types.Point, ctBefore, ctAfter []types.ElGamalCipherText) *types.ShuffleInstance {
+	return &types.ShuffleInstance{
 		Curve:    curve,
-		pPoint:   pPoint,
-		ctBefore: ctBefore,
-		ctAfter:  ctAfter,
+		PPoint:   pPoint,
+		CtBefore: ctBefore,
+		CtAfter:  ctAfter,
 	}
 }
 
-func NewShuffleWitness(permList []uint32, RscalarList []big.Int) *ShuffleWitness {
-	return &ShuffleWitness{
+func NewShuffleWitness(permList []uint32, RscalarList []big.Int) *types.ShuffleWitness {
+	return &types.ShuffleWitness{
 		PermList:    permList,
 		RscalarList: RscalarList,
 	}
 }
 
 // The function computes the non-interactive proof of knowledge of the DLOG (a.k.a Schnorr's proof)
-func ProveDlog(secret Value, pPoint types.Point, curve elliptic.Curve) (*Proof, error) {
+func ProveDlog(secret Value, pPoint types.Point, curve elliptic.Curve) (*types.Proof, error) {
 
 	// Derive parameters of the elliptic curve
 	curveParams := curve.Params()
@@ -155,8 +93,8 @@ func ProveDlog(secret Value, pPoint types.Point, curve elliptic.Curve) (*Proof, 
 
 	// Build randomness generator for the commitment value
 	trPRGbuilder := transcript.BuildRng()
-	trPRGbuilder.RekeyWitnessBytes([]byte(proof.proofType), secret)
-	trPRGbuilder.RekeyWitnessBytes([]byte(proof.proofType), commitRandSeed.Bytes())
+	trPRGbuilder.RekeyWitnessBytes([]byte(proof.ProofType), secret)
+	trPRGbuilder.RekeyWitnessBytes([]byte(proof.ProofType), commitRandSeed.Bytes())
 	trPrg, err := trPRGbuilder.Finalize(proofTypeBytes)
 	if err != nil {
 		return nil, xerrors.Errorf("Error in ProveDlog: %v\n", err)
@@ -191,38 +129,38 @@ func ProveDlog(secret Value, pPoint types.Point, curve elliptic.Curve) (*Proof, 
 	result := new(big.Int).Mod(new(big.Int).Add(commitScalar, blindedScalar), curveParams.N)
 
 	// Store into the proof
-	proof.curve = curve
-	proof.pPoint = pPointCompressed
-	proof.cPoint = cPointCompressed
-	proof.verifierChall = challBytes
-	proof.result = *result
+	proof.Curve = curve
+	proof.PPoint = pPointCompressed
+	proof.CPoint = cPointCompressed
+	proof.VerifierChall = challBytes
+	proof.Result = *result
 
-	fmt.Printf("In ProveDlog, pPoint: %v\n", proof.pPoint)
-	fmt.Printf("In ProveDlog, cPoint: %v\n", proof.cPoint)
-	fmt.Printf("In ProveDlog, result: %v\n", proof.result)
+	fmt.Printf("In ProveDlog, pPoint: %v\n", proof.PPoint)
+	fmt.Printf("In ProveDlog, cPoint: %v\n", proof.CPoint)
+	fmt.Printf("In ProveDlog, result: %v\n", proof.Result)
 	return &proof, nil
 }
 
 // Verifies the Schnorr's non-interactive proof of the knowledge of DLOG
-func VerifyDlog(proof *Proof) (bool, error) {
+func VerifyDlog(proof *types.Proof) (bool, error) {
 	// Recreate the state of the transcript to get challenge scalar
-	transcript := NewTranscript(proof.proofType)
-	proofTypeBytes := []byte(proof.proofType)
+	transcript := NewTranscript(proof.ProofType)
+	proofTypeBytes := []byte(proof.ProofType)
 
 	// Appends information about the proof instance
-	transcript.AppendMessage(proofTypeBytes, proof.pPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.PPoint)
 
 	// Appends the commitment point (the first message of the protocol)
-	transcript.AppendMessage(proofTypeBytes, proof.cPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.CPoint)
 
 	// Derives verifier's challenge based on the current transcript state
 	challBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
 
-	checkBytes := checkChallBytes(challBytes, proof.verifierChall)
+	checkBytes := checkChallBytes(challBytes, proof.VerifierChall)
 
 	fmt.Printf("In VerifyDlog, challBytes: %v\n", challBytes)
 
-	// Create placeholder for the l.h.s and the r.h.s of the final check
+	// Create placeholder for the l.h.S and the r.h.S of the final check
 	point01 := types.Point{}
 	point02 := types.Point{}
 
@@ -232,17 +170,17 @@ func VerifyDlog(proof *Proof) (bool, error) {
 
 	// Computes z*G, where G is the base point, and z (a.k.a result) is z=chall*x+c
 	// This is what is "received" by the verifier from the prover
-	point01.X, point01.Y = proof.curve.ScalarBaseMult(proof.result.Bytes())
+	point01.X, point01.Y = proof.Curve.ScalarBaseMult(proof.Result.Bytes())
 
 	// Unmarshalls both pPoint = x*G and cPoint = c*G
-	pPoint.X, pPoint.Y = elliptic.UnmarshalCompressed(proof.curve, proof.pPoint)
-	cPoint.X, cPoint.Y = elliptic.UnmarshalCompressed(proof.curve, proof.cPoint)
+	pPoint.X, pPoint.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.PPoint)
+	cPoint.X, cPoint.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.CPoint)
 
 	// Computes chall*x*G
-	point02.X, point02.Y = proof.curve.ScalarMult(pPoint.X, pPoint.Y, challBytes)
+	point02.X, point02.Y = proof.Curve.ScalarMult(pPoint.X, pPoint.Y, challBytes)
 
 	// Computes c*G+(chall*x)*G
-	point02.X, point02.Y = proof.curve.Add(point02.X, point02.Y, cPoint.X, cPoint.Y)
+	point02.X, point02.Y = proof.Curve.Add(point02.X, point02.Y, cPoint.X, cPoint.Y)
 
 	// Finally compare if the claimed value (point01) is equal to the actual value (point02)
 	return checkBytes && point01.X.Cmp(point02.X) == 0 && point01.Y.Cmp(point02.Y) == 0, nil
@@ -250,9 +188,9 @@ func VerifyDlog(proof *Proof) (bool, error) {
 
 // Proves that the two values P = x*G and P' = x*G' have the same DLOG x (a.k.a the Chaum-Pedersen proof)
 // Essentially, this corresponds to running two Schnorr proofs in parallel.
-// For details, see e.x: https://crypto.stackexchange.com/questions/99262/chaum-pedersen-protocol
+// For details, see e.x: https://crypto.Stackexchange.com/questions/99262/chaum-pedersen-protocol
 func ProveDlogEq(secret Value, pPoint types.Point, bPointOther types.Point, pPointOther types.Point,
-	curve elliptic.Curve) (*Proof, error) {
+	curve elliptic.Curve) (*types.Proof, error) {
 
 	// Derive parameters of the elliptic curve
 	curveParams := curve.Params()
@@ -285,8 +223,8 @@ func ProveDlogEq(secret Value, pPoint types.Point, bPointOther types.Point, pPoi
 
 	// Build randomness generator for the commitment value
 	trPRGbuilder := transcript.BuildRng()
-	trPRGbuilder.RekeyWitnessBytes([]byte(proof.proofType), secret)
-	trPRGbuilder.RekeyWitnessBytes([]byte(proof.proofType), commitRandSeed.Bytes())
+	trPRGbuilder.RekeyWitnessBytes([]byte(proof.ProofType), secret)
+	trPRGbuilder.RekeyWitnessBytes([]byte(proof.ProofType), commitRandSeed.Bytes())
 	trPrg, err := trPRGbuilder.Finalize(proofTypeBytes)
 	if err != nil {
 
@@ -325,77 +263,77 @@ func ProveDlogEq(secret Value, pPoint types.Point, bPointOther types.Point, pPoi
 	result := new(big.Int).Mod(new(big.Int).Sub(commitScalar, blindedScalar), curveParams.N)
 
 	// Store the results into the proof structure
-	proof.curve = curve
-	proof.bPointOther = bPointOtherCompressed
-	proof.pPoint = pPointCompressed
-	proof.pPointOther = pPointOtherCompressed
-	proof.cPoint = cPointCompressed
-	proof.cPointOther = cPointOtherCompressed
-	proof.verifierChall = challBytes
-	proof.result = *result
+	proof.Curve = curve
+	proof.BPointOther = bPointOtherCompressed
+	proof.PPoint = pPointCompressed
+	proof.PPointOther = pPointOtherCompressed
+	proof.CPoint = cPointCompressed
+	proof.CPointOther = cPointOtherCompressed
+	proof.VerifierChall = challBytes
+	proof.Result = *result
 
 	return &proof, nil
 }
 
 // Verifies that the two values P = x*G and P' = x*G' have the same DLOG x (a.k.a the Chaum-Pedersen proof)
-func VerifyDlogEq(proof *Proof) (bool, error) {
+func VerifyDlogEq(proof *types.Proof) (bool, error) {
 
 	// Recreate the state of the transcript to get challenge scalar
-	transcript := NewTranscript(proof.proofType)
-	proofTypeBytes := []byte(proof.proofType)
+	transcript := NewTranscript(proof.ProofType)
+	proofTypeBytes := []byte(proof.ProofType)
 
 	// Appends information about the proof instance
-	transcript.AppendMessage(proofTypeBytes, proof.bPointOther)
-	transcript.AppendMessage(proofTypeBytes, proof.pPoint)
-	transcript.AppendMessage(proofTypeBytes, proof.pPointOther)
+	transcript.AppendMessage(proofTypeBytes, proof.BPointOther)
+	transcript.AppendMessage(proofTypeBytes, proof.PPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.PPointOther)
 
 	// Append commitment points (the first message pair of the protocol)
-	transcript.AppendMessage(proofTypeBytes, proof.cPoint)
-	transcript.AppendMessage(proofTypeBytes, proof.cPointOther)
+	transcript.AppendMessage(proofTypeBytes, proof.CPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.CPointOther)
 
 	// Generate public challege from the current state of the transcript
 	challBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
-	checkBytes := checkChallBytes(challBytes, proof.verifierChall)
+	checkBytes := checkChallBytes(challBytes, proof.VerifierChall)
 
 	// Begin deriving components for checking if P = x*G
 
 	// Derive P from the proof
 	pPoint := types.Point{}
-	pPoint.X, pPoint.Y = elliptic.UnmarshalCompressed(proof.curve, proof.pPoint)
+	pPoint.X, pPoint.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.PPoint)
 
 	// Compute chall*P
 	gAddend01 := types.Point{}
-	gAddend01.X, gAddend01.Y = proof.curve.ScalarMult(pPoint.X, pPoint.Y, challBytes)
+	gAddend01.X, gAddend01.Y = proof.Curve.ScalarMult(pPoint.X, pPoint.Y, challBytes)
 
 	// Compute z*G (where z=c-chall*x)
 	gAddend02 := types.Point{}
-	gAddend02.X, gAddend02.Y = proof.curve.ScalarBaseMult(proof.result.Bytes())
+	gAddend02.X, gAddend02.Y = proof.Curve.ScalarBaseMult(proof.Result.Bytes())
 
 	// Compute chall*P + z*G
 	resultFirst := types.Point{}
-	resultFirst.X, resultFirst.Y = proof.curve.Add(gAddend01.X, gAddend01.Y, gAddend02.X, gAddend02.Y)
+	resultFirst.X, resultFirst.Y = proof.Curve.Add(gAddend01.X, gAddend01.Y, gAddend02.X, gAddend02.Y)
 
 	// Begin deriving components for checking if P=x*G
 
 	gPrimeAddend01 := types.Point{}
 	pPointOther := types.Point{}
-	pPointOther.X, pPointOther.Y = elliptic.UnmarshalCompressed(proof.curve, proof.pPointOther)
-	gPrimeAddend01.X, gPrimeAddend01.Y = proof.curve.ScalarMult(pPointOther.X, pPointOther.Y, challBytes)
+	pPointOther.X, pPointOther.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.PPointOther)
+	gPrimeAddend01.X, gPrimeAddend01.Y = proof.Curve.ScalarMult(pPointOther.X, pPointOther.Y, challBytes)
 
 	// Checks for the other pair (corresponds to checks for G')
 	bPointOther := types.Point{}
 	gPrimeAddend02 := types.Point{}
-	bPointOther.X, bPointOther.Y = elliptic.UnmarshalCompressed(proof.curve, proof.bPointOther)
-	gPrimeAddend02.X, gPrimeAddend02.Y = proof.curve.ScalarMult(bPointOther.X, bPointOther.Y, proof.result.Bytes())
+	bPointOther.X, bPointOther.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.BPointOther)
+	gPrimeAddend02.X, gPrimeAddend02.Y = proof.Curve.ScalarMult(bPointOther.X, bPointOther.Y, proof.Result.Bytes())
 
 	resultSecond := types.Point{}
-	resultSecond.X, resultSecond.Y = proof.curve.Add(gPrimeAddend01.X, gPrimeAddend01.Y, gPrimeAddend02.X, gPrimeAddend02.Y)
+	resultSecond.X, resultSecond.Y = proof.Curve.Add(gPrimeAddend01.X, gPrimeAddend01.Y, gPrimeAddend02.X, gPrimeAddend02.Y)
 
 	cPoint := types.Point{}
-	cPoint.X, cPoint.Y = elliptic.UnmarshalCompressed(proof.curve, proof.cPoint)
+	cPoint.X, cPoint.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.CPoint)
 
 	cPointOther := types.Point{}
-	cPointOther.X, cPointOther.Y = elliptic.UnmarshalCompressed(proof.curve, proof.cPointOther)
+	cPointOther.X, cPointOther.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.CPointOther)
 	return checkBytes &&
 		cPoint.X.Cmp(resultFirst.X) == 0 && cPoint.Y.Cmp(resultFirst.Y) == 0 &&
 		cPointOther.X.Cmp(resultSecond.X) == 0 && cPointOther.Y.Cmp(resultSecond.Y) == 0, nil
@@ -406,7 +344,7 @@ func VerifyDlogEq(proof *Proof) (bool, error) {
 // The proof generation can be parsed into the two cases:
 // 1. For the true case: Run the regular Schnorr protocol
 // 2. For the fake case: Use simulator to create an accepting transcript
-func ProveDlogOr(secret Value, pPoint types.Point, secretOther Value, pPointOther types.Point, secretBit bool, curve elliptic.Curve) (*Proof, error) {
+func ProveDlogOr(secret Value, pPoint types.Point, secretOther Value, pPointOther types.Point, secretBit bool, curve elliptic.Curve) (*types.Proof, error) {
 
 	curveParams := curve.Params()
 	var trueSecret Value
@@ -523,28 +461,28 @@ func ProveDlogOr(secret Value, pPoint types.Point, secretOther Value, pPointOthe
 	fakepPointCompressed := elliptic.MarshalCompressed(curve, fakepPoint.X, fakepPoint.Y)
 
 	if secretBit {
-		proof.curve = curve
-		proof.result = *trueResult
-		proof.resultOther = *fakeResult
-		proof.cPoint = cPointCompressed
-		proof.cPointOther = fakeCPointCompressed
-		proof.pPoint = truepPointCompressed
-		proof.pPointOther = fakepPointCompressed
-		proof.verifierChall = verifierChallBytes
-		proof.proverChall = trueChallBytes
-		proof.proverChallOther = fakeChallBytes
+		proof.Curve = curve
+		proof.Result = *trueResult
+		proof.ResultOther = *fakeResult
+		proof.CPoint = cPointCompressed
+		proof.CPointOther = fakeCPointCompressed
+		proof.PPoint = truepPointCompressed
+		proof.PPointOther = fakepPointCompressed
+		proof.VerifierChall = verifierChallBytes
+		proof.ProverChall = trueChallBytes
+		proof.ProverChallOther = fakeChallBytes
 
 	} else {
-		proof.curve = curve
-		proof.result = *fakeResult
-		proof.resultOther = *trueResult
-		proof.cPoint = fakeCPointCompressed
-		proof.cPointOther = cPointCompressed
-		proof.pPoint = fakepPointCompressed
-		proof.pPointOther = truepPointCompressed
-		proof.verifierChall = verifierChallBytes
-		proof.proverChall = fakeChallBytes
-		proof.proverChallOther = trueChallBytes
+		proof.Curve = curve
+		proof.Result = *fakeResult
+		proof.ResultOther = *trueResult
+		proof.CPoint = fakeCPointCompressed
+		proof.CPointOther = cPointCompressed
+		proof.PPoint = fakepPointCompressed
+		proof.PPointOther = truepPointCompressed
+		proof.VerifierChall = verifierChallBytes
+		proof.ProverChall = fakeChallBytes
+		proof.ProverChallOther = trueChallBytes
 	}
 
 	return &proof, nil
@@ -552,7 +490,7 @@ func ProveDlogOr(secret Value, pPoint types.Point, secretOther Value, pPointOthe
 
 // Verifies that one of the two proof instances satisfies the DLOG relation
 // (a.k.a the OR-proof for the DLOG relation)
-func VerifyDlogOr(proof *Proof) (bool, error) {
+func VerifyDlogOr(proof *types.Proof) (bool, error) {
 
 	proofTypeBytes := []byte(DLOG_OR_LABEL)
 
@@ -560,16 +498,16 @@ func VerifyDlogOr(proof *Proof) (bool, error) {
 	transcript := NewTranscript(DLOG_OR_LABEL)
 
 	// Append public parameters corresponding to the
-	transcript.AppendMessage(proofTypeBytes, proof.pPoint)
-	transcript.AppendMessage(proofTypeBytes, proof.pPointOther)
+	transcript.AppendMessage(proofTypeBytes, proof.PPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.PPointOther)
 
 	// Append the commitment points to the trasncript
-	transcript.AppendMessage(proofTypeBytes, proof.cPoint)
-	transcript.AppendMessage(proofTypeBytes, proof.cPointOther)
+	transcript.AppendMessage(proofTypeBytes, proof.CPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.CPointOther)
 
-	fmt.Printf("In VerifyDlog, proverChall: %v\n", proof.proverChall)
-	fmt.Printf("In VerifyDlog, proverChallOther: %v\n", proof.proverChallOther)
-	fmt.Printf("In VerifyDlog, PROOF verifierChall: %v\n", proof.verifierChall)
+	fmt.Printf("In VerifyDlog, proverChall: %v\n", proof.ProverChall)
+	fmt.Printf("In VerifyDlog, proverChallOther: %v\n", proof.ProverChallOther)
+	fmt.Printf("In VerifyDlog, PROOF verifierChall: %v\n", proof.VerifierChall)
 
 	// Derive challenge bytes based on the state of the current transcript
 	verifierChallBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
@@ -577,9 +515,9 @@ func VerifyDlogOr(proof *Proof) (bool, error) {
 
 	// Begin checking if the verifier challenge is correctly derived
 	checkBytesXor := true
-	for i, val := range proof.verifierChall {
+	for i, val := range proof.VerifierChall {
 		// 1. Check if the xor of two byte streams corresponds to the byte stream from verifier
-		checkBytesXor = checkBytesXor && (val == (proof.proverChall[i] ^ proof.proverChallOther[i]))
+		checkBytesXor = checkBytesXor && (val == (proof.ProverChall[i] ^ proof.ProverChallOther[i]))
 
 		// 2. Check if the derived verifier stream from the transcript and the actual stream are equal
 		checkBytesXor = checkBytesXor && (val == verifierChallBytes[i])
@@ -587,19 +525,19 @@ func VerifyDlogOr(proof *Proof) (bool, error) {
 
 	// Create two proof instances which need to be checked
 
-	proof01 := Proof{}
-	proof01.curve = proof.curve
-	proof01.pPoint = proof.pPoint
-	proof01.cPoint = proof.cPoint
-	proof01.verifierChall = proof.proverChall
-	proof01.result = proof.result
+	proof01 := types.Proof{}
+	proof01.Curve = proof.Curve
+	proof01.PPoint = proof.PPoint
+	proof01.CPoint = proof.CPoint
+	proof01.VerifierChall = proof.ProverChall
+	proof01.Result = proof.Result
 
-	proof02 := Proof{}
-	proof02.curve = proof.curve
-	proof02.pPoint = proof.pPointOther
-	proof02.cPoint = proof.cPointOther
-	proof02.verifierChall = proof.proverChallOther
-	proof02.result = proof.resultOther
+	proof02 := types.Proof{}
+	proof02.Curve = proof.Curve
+	proof02.PPoint = proof.PPointOther
+	proof02.CPoint = proof.CPointOther
+	proof02.VerifierChall = proof.ProverChallOther
+	proof02.Result = proof.ResultOther
 
 	// Both proof instances need to satisfy the DLOG (Schnorr's proof check)
 	res01 := VerifyDlogRelation(&proof01)
@@ -664,10 +602,10 @@ func SimulatorDlog(challBytes []byte, trPRG *TranscriptRng, pPoint types.Point, 
 }
 
 // Verifies that the values stored in the proof satisfies the DLOG (Schnorr's) relation
-func VerifyDlogRelation(proof *Proof) bool {
-	curve := proof.curve
+func VerifyDlogRelation(proof *types.Proof) bool {
+	curve := proof.Curve
 
-	// Create the placeholder for the l.h.s and the r.h.s of the check
+	// Create the placeholder for the l.h.S and the r.h.S of the check
 	pointlhs := types.Point{}
 	pointrhs := types.Point{}
 
@@ -675,37 +613,37 @@ func VerifyDlogRelation(proof *Proof) bool {
 	pPoint := types.Point{}
 	cPoint := types.Point{}
 
-	fmt.Printf("In VerifyDlogRelation, cPointCompressed %v\n", proof.cPoint)
-	fmt.Printf("In VerifyDlogRelation, challBytes %v\n", proof.verifierChall)
-	fmt.Printf("In VerifyDlogRelation, blindScalar %v\n", proof.result.Bytes())
+	fmt.Printf("In VerifyDlogRelation, cPointCompressed %v\n", proof.CPoint)
+	fmt.Printf("In VerifyDlogRelation, challBytes %v\n", proof.VerifierChall)
+	fmt.Printf("In VerifyDlogRelation, blindScalar %v\n", proof.Result.Bytes())
 
-	fmt.Printf("In VerifyDlogRelation result scalar: %v\n", proof.result.Bytes())
+	fmt.Printf("In VerifyDlogRelation result scalar: %v\n", proof.Result.Bytes())
 
-	fmt.Printf("In VerifyDlogRelation, multiplying base point with value %v\n", proof.result.Bytes())
+	fmt.Printf("In VerifyDlogRelation, multiplying base point with value %v\n", proof.Result.Bytes())
 
-	// Computes z*G, which acts as the l.h.s of the check
-	pointlhs.X, pointlhs.Y = curve.ScalarBaseMult(proof.result.Bytes())
+	// Computes z*G, which acts as the l.h.S of the check
+	pointlhs.X, pointlhs.Y = curve.ScalarBaseMult(proof.Result.Bytes())
 
 	// Cast the proof instance and the commitment point as Point structs
-	pPoint.X, pPoint.Y = elliptic.UnmarshalCompressed(curve, proof.pPoint)
-	cPoint.X, cPoint.Y = elliptic.UnmarshalCompressed(curve, proof.cPoint)
+	pPoint.X, pPoint.Y = elliptic.UnmarshalCompressed(curve, proof.PPoint)
+	cPoint.X, cPoint.Y = elliptic.UnmarshalCompressed(curve, proof.CPoint)
 
-	//Compute the r.h.s as a chall*P+cPoint
-	pointrhs.X, pointrhs.Y = proof.curve.ScalarMult(pPoint.X, pPoint.Y, proof.verifierChall)
-	pointrhs.X, pointrhs.Y = proof.curve.Add(pointrhs.X, pointrhs.Y, cPoint.X, cPoint.Y)
+	//Compute the r.h.S as a chall*P+cPoint
+	pointrhs.X, pointrhs.Y = proof.Curve.ScalarMult(pPoint.X, pPoint.Y, proof.VerifierChall)
+	pointrhs.X, pointrhs.Y = proof.Curve.Add(pointrhs.X, pointrhs.Y, cPoint.X, cPoint.Y)
 
 	fmt.Printf("In VerifyDlogRelation, Comparing X points %v\n", pointlhs.X.Cmp(pointrhs.X) == 0)
 	fmt.Printf("In VerifyDlogRelation, Comparing Y points %v\n", pointlhs.Y.Cmp(pointrhs.Y) == 0)
 
-	//Finally, check if the l.h.s and the r.h.s match
+	//Finally, check if the l.h.S and the r.h.S match
 	return pointlhs.X.Cmp(pointrhs.X) == 0 && pointlhs.Y.Cmp(pointrhs.Y) == 0
 }
 
-func Verify(proof *Proof) (bool, error) {
+func Verify(proof *types.Proof) (bool, error) {
 
 	var result bool
 	var err error
-	switch proof.proofType {
+	switch proof.ProofType {
 	case DLOG_LABEL:
 		result, err = VerifyDlog(proof)
 	case DLOG_EQ_LABEL:
@@ -723,24 +661,24 @@ func Verify(proof *Proof) (bool, error) {
 // Computes the proof of the Sako's verifiable shuffle
 // Effectively, it acts as  4 Sigma proofs run in parallel, which are
 // 1.
-func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleProof, error) {
+func ProveShuffle(instance *types.ShuffleInstance, witness *types.ShuffleWitness) (*types.ShuffleProof, error) {
 	curveParams := instance.Curve.Params()
 	proofTypeBytes := []byte(SHUFFLE_LABEL)
 
 	transcript := NewTranscript(SHUFFLE_LABEL)
 
 	// Initialize transcript with the proof instance (which consists)
-	pPointCompressed := elliptic.MarshalCompressed(instance.Curve, instance.pPoint.X, instance.pPoint.Y)
+	pPointCompressed := elliptic.MarshalCompressed(instance.Curve, instance.PPoint.X, instance.PPoint.Y)
 
 	// If a ciphertext consists of a pair ct=(ct_1, ct_2), then these are
 	// The lists of ct_2,s for each ciphertext
-	reEncBeforeList := MakeReencList(instance.ctBefore)
-	reEncAfterList := MakeReencList(instance.ctAfter)
+	reEncBeforeList := MakeReencList(instance.CtBefore)
+	reEncAfterList := MakeReencList(instance.CtAfter)
 
 	// If a ciphertext consists of a pair ct=(ct_1, ct_2), then these are
 	// The lists of ct_2,s for each ciphertext
-	ctMsgBeforeList := MakeCtMsgList(instance.ctBefore)
-	ctMsgAfterList := MakeCtMsgList(instance.ctAfter)
+	ctMsgBeforeList := MakeCtMsgList(instance.CtBefore)
+	ctMsgAfterList := MakeCtMsgList(instance.CtAfter)
 
 	reEncBeforeByteList := MarshalPointList(reEncBeforeList, instance.Curve)
 	reEncAfterByteList := MarshalPointList(reEncAfterList, instance.Curve)
@@ -783,7 +721,7 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 	lambdaScalarBytes := trPrg.GetRandomness(SCALAR_SIZE)
 	phiScalarBytes := trPrg.GetRandomness(SCALAR_SIZE)
 
-	fmt.Printf("In ProveShuffle, public point is: (%v,%v)\n", instance.pPoint.X, instance.pPoint.Y)
+	fmt.Printf("In ProveShuffle, public point is: (%v,%v)\n", instance.PPoint.X, instance.PPoint.Y)
 	phiScalar := new(big.Int).SetBytes(phiScalarBytes)
 	phiList := [][]byte{}
 
@@ -859,11 +797,11 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 
 	//First compute  \phi*P
 	mPrimePoint := types.Point{}
-	mPrimePoint.X, mPrimePoint.Y = instance.Curve.ScalarMult(instance.pPoint.X, instance.pPoint.Y, phiScalarBytes)
+	mPrimePoint.X, mPrimePoint.Y = instance.Curve.ScalarMult(instance.PPoint.X, instance.PPoint.Y, phiScalarBytes)
 	fmt.Printf("In ProveShuffle, mPrimePoint initial result is (%v,%v)\n", mPrimePoint.X, mPrimePoint.Y)
 
 	// Then compute the sum by calcluating addends and add them at each step to the running value of M'
-	for i := 0; i < len(instance.ctBefore); i++ {
+	for i := 0; i < len(instance.CtBefore); i++ {
 		// Computes addend = phi[i] * ct_{i,2}
 		addend := types.Point{}
 		addend.X, addend.Y = instance.Curve.ScalarMult(ctMsgBeforeList[i].X, ctMsgBeforeList[i].Y, phiList[i])
@@ -1213,39 +1151,39 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 
 	fmt.Printf("In ProveShuffle, dScalar final %v\n", dScalar)
 
-	shuffleProof := ShuffleProof{
+	shuffleProof := types.ShuffleProof{
 		ProofType:          SHUFFLE_LABEL,
-		instance:           *instance,
-		verifierChallList:  challScalarList,
-		tPoint:             tPointCompressed,
-		vPoint:             vPointCompressed,
-		wPoint:             wPointCompressed,
-		uPoint:             uPointCompressed,
-		uPointListBytes:    uPointListCompressed,
-		gPrimePoint:        gPrimePointCompressed,
-		mPrimePoint:        mPrimePointCompressed,
-		tCapPointListBytes: tCapPointListCompressed,
-		vCapPointListBytes: vCapPointListCompressed,
-		vCapPoint:          vCapPointCompressed,
-		wCapPointListBytes: wCapPointListCompressed,
-		wCapPoint:          wCapPointCompressed,
-		sZeroScalar:        *sZeroScalar,
-		sList:              sList,
-		dScalar:            *dScalar,
+		Instance:           *instance,
+		VerifierChallList:  challScalarList,
+		TPoint:             tPointCompressed,
+		VPoint:             vPointCompressed,
+		WPoint:             wPointCompressed,
+		UPoint:             uPointCompressed,
+		UPointListBytes:    uPointListCompressed,
+		GPrimePoint:        gPrimePointCompressed,
+		MPrimePoint:        mPrimePointCompressed,
+		TCapPointListBytes: tCapPointListCompressed,
+		VCapPointListBytes: vCapPointListCompressed,
+		VCapPoint:          vCapPointCompressed,
+		WCapPointListBytes: wCapPointListCompressed,
+		WCapPoint:          wCapPointCompressed,
+		SZeroScalar:        *sZeroScalar,
+		SList:              sList,
+		DScalar:            *dScalar,
 	}
 	return &shuffleProof, nil
 }
 
-func VerifyShuffle(proof *ShuffleProof) bool {
-	curve := proof.instance.Curve
-	curveParams := proof.instance.Curve.Params()
+func VerifyShuffle(proof *types.ShuffleProof) bool {
+	curve := proof.Instance.Curve
+	curveParams := proof.Instance.Curve.Params()
 
 	transcript := NewTranscript(proof.ProofType)
 	proofTypeBytes := []byte(proof.ProofType)
-	reEncBeforeList := MakeReencList(proof.instance.ctBefore)
-	reEncAfterList := MakeReencList(proof.instance.ctAfter)
-	ctMsgBeforeList := MakeCtMsgList(proof.instance.ctBefore)
-	ctMsgAfterList := MakeCtMsgList(proof.instance.ctAfter)
+	reEncBeforeList := MakeReencList(proof.Instance.CtBefore)
+	reEncAfterList := MakeReencList(proof.Instance.CtAfter)
+	ctMsgBeforeList := MakeCtMsgList(proof.Instance.CtBefore)
+	ctMsgAfterList := MakeCtMsgList(proof.Instance.CtAfter)
 
 	reEncBeforeByteList := MarshalPointList(reEncBeforeList, curve)
 	reEncAfterByteList := MarshalPointList(reEncAfterList, curve)
@@ -1253,8 +1191,8 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	ctMsgAfterByteList := MarshalPointList(ctMsgAfterList, curve)
 
 	pPoint := types.Point{
-		X: proof.instance.pPoint.X,
-		Y: proof.instance.pPoint.Y,
+		X: proof.Instance.PPoint.X,
+		Y: proof.Instance.PPoint.Y,
 	}
 
 	pPointCompressed := elliptic.MarshalCompressed(curve, pPoint.X, pPoint.Y)
@@ -1268,30 +1206,30 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 
 	//Putting commitment messages into the transcript
 
-	transcript.AppendMessage(proofTypeBytes, proof.tPoint)
-	transcript.AppendMessage(proofTypeBytes, proof.vPoint)
-	transcript.AppendMessage(proofTypeBytes, proof.wPoint)
-	transcript.AppendMessage(proofTypeBytes, proof.uPoint)
-	transcript.BatchAppendMessages(proofTypeBytes, proof.uPointListBytes)
+	transcript.AppendMessage(proofTypeBytes, proof.TPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.VPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.WPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.UPoint)
+	transcript.BatchAppendMessages(proofTypeBytes, proof.UPointListBytes)
 	//TODO: extra missing ^g'_i, ^g' point
 
-	transcript.AppendMessage(proofTypeBytes, proof.gPrimePoint)
-	transcript.AppendMessage(proofTypeBytes, proof.mPrimePoint)
-	transcript.BatchAppendMessages(proofTypeBytes, proof.tCapPointListBytes)
-	transcript.BatchAppendMessages(proofTypeBytes, proof.vCapPointListBytes)
-	transcript.AppendMessage(proofTypeBytes, proof.vCapPoint)
-	transcript.BatchAppendMessages(proofTypeBytes, proof.wCapPointListBytes)
-	transcript.AppendMessage(proofTypeBytes, proof.wCapPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.GPrimePoint)
+	transcript.AppendMessage(proofTypeBytes, proof.MPrimePoint)
+	transcript.BatchAppendMessages(proofTypeBytes, proof.TCapPointListBytes)
+	transcript.BatchAppendMessages(proofTypeBytes, proof.VCapPointListBytes)
+	transcript.AppendMessage(proofTypeBytes, proof.VCapPoint)
+	transcript.BatchAppendMessages(proofTypeBytes, proof.WCapPointListBytes)
+	transcript.AppendMessage(proofTypeBytes, proof.WCapPoint)
 
 	//Verifier's step: derive public coins based on the
 	challBytesList := make([][]byte, 0)
-	for i := 0; i < len(proof.instance.ctBefore); i++ {
+	for i := 0; i < len(proof.Instance.CtBefore); i++ {
 		challBytesList = append(challBytesList, transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE))
 	}
 
 	fmt.Printf("In VerifyShuffle, challBytesList is %v\n", challBytesList)
 
-	checkBytes := checkChallBytesLists(challBytesList, proof.verifierChallList)
+	checkBytes := checkChallBytesLists(challBytesList, proof.VerifierChallList)
 
 	//Parse all the points for the final verifier's check
 
@@ -1305,30 +1243,30 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	vCapPoint := types.Point{}
 	wCapPoint := types.Point{}
 
-	tPoint.X, tPoint.Y = elliptic.UnmarshalCompressed(curve, proof.tPoint)
-	wPoint.X, wPoint.Y = elliptic.UnmarshalCompressed(curve, proof.wPoint)
-	vPoint.X, vPoint.Y = elliptic.UnmarshalCompressed(curve, proof.vPoint)
-	uPoint.X, uPoint.Y = elliptic.UnmarshalCompressed(curve, proof.uPoint)
+	tPoint.X, tPoint.Y = elliptic.UnmarshalCompressed(curve, proof.TPoint)
+	wPoint.X, wPoint.Y = elliptic.UnmarshalCompressed(curve, proof.WPoint)
+	vPoint.X, vPoint.Y = elliptic.UnmarshalCompressed(curve, proof.VPoint)
+	uPoint.X, uPoint.Y = elliptic.UnmarshalCompressed(curve, proof.UPoint)
 
-	gPrimePoint.X, gPrimePoint.Y = elliptic.UnmarshalCompressed(curve, proof.gPrimePoint)
-	mPrimePoint.X, mPrimePoint.Y = elliptic.UnmarshalCompressed(curve, proof.mPrimePoint)
-	vCapPoint.X, vCapPoint.Y = elliptic.UnmarshalCompressed(curve, proof.vCapPoint)
-	wCapPoint.X, wCapPoint.Y = elliptic.UnmarshalCompressed(curve, proof.wCapPoint)
+	gPrimePoint.X, gPrimePoint.Y = elliptic.UnmarshalCompressed(curve, proof.GPrimePoint)
+	mPrimePoint.X, mPrimePoint.Y = elliptic.UnmarshalCompressed(curve, proof.MPrimePoint)
+	vCapPoint.X, vCapPoint.Y = elliptic.UnmarshalCompressed(curve, proof.VCapPoint)
+	wCapPoint.X, wCapPoint.Y = elliptic.UnmarshalCompressed(curve, proof.WCapPoint)
 
-	uPointList := UnmarshalPointList(proof.uPointListBytes, curve)
-	vCapPointList := UnmarshalPointList(proof.vCapPointListBytes, curve)
-	wCapPointList := UnmarshalPointList(proof.wCapPointListBytes, curve)
-	tCapPointList := UnmarshalPointList(proof.tCapPointListBytes, curve)
+	uPointList := UnmarshalPointList(proof.UPointListBytes, curve)
+	vCapPointList := UnmarshalPointList(proof.VCapPointListBytes, curve)
+	wCapPointList := UnmarshalPointList(proof.WCapPointListBytes, curve)
+	tCapPointList := UnmarshalPointList(proof.TCapPointListBytes, curve)
 	// fmt.Printf("wCapPointList, %v\n", wCapPointList)
 
 	//Corresponds to check (5.20) in notes
 	sGpoint := types.Point{}
-	sGpoint.X, sGpoint.Y = curve.ScalarBaseMult(proof.sZeroScalar.Bytes())
+	sGpoint.X, sGpoint.Y = curve.ScalarBaseMult(proof.SZeroScalar.Bytes())
 
-	fmt.Printf("In VerifyShuffle, sZeroScalar is %v\n", proof.sZeroScalar)
+	fmt.Printf("In VerifyShuffle, sZeroScalar is %v\n", proof.SZeroScalar)
 	fmt.Printf("In VerifyShuffle, sGpoint, initial value is (%v,%v)\n", sGpoint.X, sGpoint.Y)
 
-	for i, sScalar := range proof.sList {
+	for i, sScalar := range proof.SList {
 		addend := types.Point{}
 		fmt.Printf("In VerifyShuffle, reEncBeforeList[i] is (%v,%v)\n", reEncBeforeList[i].X, reEncBeforeList[i].Y)
 		fmt.Printf("In VerifyShuffle, sScalar is %v\n", sScalar)
@@ -1362,10 +1300,10 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	//Corresponds to check (5.21) in notes
 
 	sMpoint := types.Point{}
-	sMpoint.X, sMpoint.Y = curve.ScalarMult(pPoint.X, pPoint.Y, proof.sZeroScalar.Bytes())
+	sMpoint.X, sMpoint.Y = curve.ScalarMult(pPoint.X, pPoint.Y, proof.SZeroScalar.Bytes())
 	fmt.Printf("In VerifyShuffle, sMpoint initial is (%v,%v)\n", sMpoint.X, sMpoint.Y)
 
-	for i, s := range proof.sList {
+	for i, s := range proof.SList {
 		addend := types.Point{}
 		fmt.Printf("In VerifyShuffle, for %d, ctMsgBefore[i] is (%v,%v)\n", i, ctMsgBeforeList[i].X, ctMsgBeforeList[i].Y)
 
@@ -1401,14 +1339,14 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	sBetaSqWGPoint := types.Point{}
 
 	//Initialize point to be s0*W
-	sBetaSqWGPoint.X, sBetaSqWGPoint.Y = curve.ScalarMult(wPoint.X, wPoint.Y, proof.sZeroScalar.Bytes())
+	sBetaSqWGPoint.X, sBetaSqWGPoint.Y = curve.ScalarMult(wPoint.X, wPoint.Y, proof.SZeroScalar.Bytes())
 
 	fmt.Printf("In VerifyShuffle, challMprimePoint initial is (%v,%v)\n", sBetaSqWGPoint.X, sBetaSqWGPoint.Y)
 
 	sqDiff := new(big.Int).SetUint64(0)
 	for i := 0; i < len(challBytesList); i++ {
 		//Compute s_i^2
-		siSq := new(big.Int).Set(proof.sList[i])
+		siSq := new(big.Int).Set(proof.SList[i])
 
 		siSq = siSq.Mul(siSq, siSq)
 		siSq = siSq.Mod(siSq, curveParams.N)
@@ -1465,7 +1403,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	//Corresponds to check (5.23) in notes
 
 	dGpoint := types.Point{}
-	dGpoint.X, dGpoint.Y = curve.ScalarBaseMult(proof.dScalar.Bytes())
+	dGpoint.X, dGpoint.Y = curve.ScalarBaseMult(proof.DScalar.Bytes())
 
 	fmt.Printf("In VerifyShuffle, dGPoint final is (%v,%v)\n", dGpoint.X, dGpoint.Y)
 
@@ -1497,17 +1435,17 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 
 	//Compute lhs of the (5.24) check
 	dTPoint := types.Point{}
-	dTPoint.X, dTPoint.Y = curve.ScalarMult(tPoint.X, tPoint.Y, proof.dScalar.Bytes())
+	dTPoint.X, dTPoint.Y = curve.ScalarMult(tPoint.X, tPoint.Y, proof.DScalar.Bytes())
 	fmt.Printf("In VerifyShuffle, value of dTPoint is (%v,%v)\n", dTPoint.X, dTPoint.Y)
 
 	sZeroVPoint := types.Point{}
-	sZeroVPoint.X, sZeroVPoint.Y = curve.ScalarMult(vPoint.X, vPoint.Y, proof.sZeroScalar.Bytes())
+	sZeroVPoint.X, sZeroVPoint.Y = curve.ScalarMult(vPoint.X, vPoint.Y, proof.SZeroScalar.Bytes())
 	fmt.Printf("In VerifyShuffle, value of sZeroVPoint is (%v,%v)\n", sZeroVPoint.X, sZeroVPoint.Y)
 
 	cubeDiff := new(big.Int).SetUint64(0)
 	for i := 0; i < len(challBytesList); i++ {
 		//Compute s_i^3
-		siScalar := new(big.Int).Set(proof.sList[i])
+		siScalar := new(big.Int).Set(proof.SList[i])
 		siCubed := new(big.Int).SetUint64(0)
 		siCubed = siCubed.Mul(siScalar, siScalar)
 		siCubed = siCubed.Mul(siCubed, siScalar)
@@ -1625,7 +1563,7 @@ func checkChallBytesLists(derived, actual [][]byte) bool {
 //Helper functions for this class
 /*********************************************************************/
 
-func ElGamalEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big.Int, msg *big.Int) *ElGamalCipherText {
+func ElGamalEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big.Int, msg *big.Int) *types.ElGamalCipherText {
 	ct1 := types.Point{}
 	ct2 := types.Point{}
 	msgPoint := types.Point{}
@@ -1639,13 +1577,13 @@ func ElGamalEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big.I
 	// fmt.Printf("ElGamalEncryption: rpPoint is: (%v,%v)\n", rpPoint.X, rpPoint.Y)
 
 	ct2.X, ct2.Y = curve.Add(rpPoint.X, rpPoint.Y, msgPoint.X, msgPoint.Y)
-	return &ElGamalCipherText{
-		ct1: ct1,
-		ct2: ct2,
+	return &types.ElGamalCipherText{
+		Ct1: ct1,
+		Ct2: ct2,
 	}
 }
 
-func ElGamalReEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big.Int, cipherText *ElGamalCipherText) *ElGamalCipherText {
+func ElGamalReEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big.Int, cipherText *types.ElGamalCipherText) *types.ElGamalCipherText {
 	ct1 := types.Point{}
 	ct2 := types.Point{}
 	rpPoint := types.Point{}
@@ -1653,15 +1591,15 @@ func ElGamalReEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big
 	rBytes := rScalar.Bytes()
 	ct1.X, ct1.Y = curve.ScalarBaseMult(rBytes)
 
-	ct1.X, ct1.Y = curve.Add(ct1.X, ct1.Y, cipherText.ct1.X, cipherText.ct1.Y)
+	ct1.X, ct1.Y = curve.Add(ct1.X, ct1.Y, cipherText.Ct1.X, cipherText.Ct1.Y)
 
 	rpPoint.X, rpPoint.Y = curve.ScalarMult(pPoint.X, pPoint.Y, rBytes)
 
 	// fmt.Printf("ElGamalReEncryption: rpPoint is: (%v,%v)\n", rpPoint.X, rpPoint.Y)
 
-	ct2.X, ct2.Y = curve.Add(rpPoint.X, rpPoint.Y, cipherText.ct2.X, cipherText.ct2.Y)
-	return &ElGamalCipherText{
-		ct1: ct1,
-		ct2: ct2,
+	ct2.X, ct2.Y = curve.Add(rpPoint.X, rpPoint.Y, cipherText.Ct2.X, cipherText.Ct2.Y)
+	return &types.ElGamalCipherText{
+		Ct1: ct1,
+		Ct2: ct2,
 	}
 }
