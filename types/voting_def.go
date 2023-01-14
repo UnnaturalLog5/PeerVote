@@ -18,7 +18,7 @@ type ElectionBase struct {
 	MixnetServerInfos   []*MixnetServerInfo
 	MixnetServersPoints []int // Incremented when mixnet server is among qualified nodes in types.ElectionReadyMessage
 	ElectionReadyCnt    int
-	Initiators          map[string]struct{}
+	Initiators          map[string]big.Int
 }
 
 type Election struct {

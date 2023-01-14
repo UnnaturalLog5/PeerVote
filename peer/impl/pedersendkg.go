@@ -413,9 +413,11 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 func (n *node) sendStartElectionMessage(election *types.Election) {
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending StartElectionMessage")
 
+	publicKey := n.ReconstructPublicKey(election)
 	startElectionMessage := types.StartElectionMessage{
 		ElectionID: election.Base.ElectionID,
 		Expiration: election.Base.Expiration,
+		PublicKey:  publicKey,
 	}
 
 	msg, err := marshalMessage(&startElectionMessage)
@@ -456,7 +458,7 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 		election = n.electionStore.Get(startElectionMessage.ElectionID)
 	}
 
-	election.Base.Initiators[pkt.Header.Source] = struct{}{}
+	election.Base.Initiators[pkt.Header.Source] = startElectionMessage.PublicKey
 	election.Base.Expiration = startElectionMessage.Expiration
 
 	if n.IsElectionStarted(election) {
@@ -552,13 +554,13 @@ func (n *node) VerifyEquation(j *big.Int, share *big.Int, X []big.Int) bool {
 }
 
 // ReconstructPublicKey reconstructs the public value of the distributed shared key
-func (n *node) ReconstructPublicKey(election types.Election) *big.Int {
+func (n *node) ReconstructPublicKey(election *types.Election) big.Int {
 	productVal := new(big.Int).SetInt64(1)
 	for _, server := range election.Base.MixnetServerInfos {
 		productVal.Mul(productVal, &server.X[0])
 		productVal.Mod(productVal, &n.conf.PedersenSuite.P)
 	}
-	return productVal
+	return *productVal
 }
 
 // GetMyMixnetServerID returns the ID of the node within mixnet servers

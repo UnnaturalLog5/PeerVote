@@ -59,4 +59,5 @@ type DKGRevealShareMessage struct {
 type StartElectionMessage struct {
 	ElectionID string
 	Expiration time.Time
+	PublicKey  big.Int
 }
