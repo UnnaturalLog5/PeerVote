@@ -2,6 +2,7 @@ package impl
 
 import (
 	"errors"
+	"math/big"
 	"time"
 
 	"github.com/rs/xid"
@@ -21,7 +22,7 @@ func (n *node) AnnounceElection(title, description string, choices, mixnetServer
 
 	electionID := xid.New().String()
 	mixnetServersPoints := make([]int, len(mixnetServers))
-	initiators := make(map[string]struct{})
+	initiators := make(map[string]big.Int)
 
 	announceElectionMessage := types.AnnounceElectionMessage{
 		Base: types.ElectionBase{
@@ -86,7 +87,7 @@ func (n *node) Vote(electionID string, choiceID string) error {
 	election.MyVote = voteMessage.ChoiceID
 	n.electionStore.Set(voteMessage.ElectionID, election)
 
-	mixnetServer := election.Base.MixnetServers[0]
+	mixnetServer := n.GetFirstQualifiedInitiator(election)
 	err := n.sendVoteMessage(mixnetServer, voteMessage)
 	if err != nil {
 		return err
