@@ -20,8 +20,8 @@ import (
 func (n *node) PedersenDkg(election *types.Election) {
 	// Choose a random polynomial f(z) over Zq of degree t:
 	// f(z) = a0 + a1*z + ... + at*z^t
-	a := GenerateRandomPolynomial(n.conf.PedersenSuite.T, &n.conf.PedersenSuite.Q)
-	X := make([]big.Int, n.conf.PedersenSuite.T+1)
+	a := GenerateRandomPolynomial(election.Base.Threshold, &n.conf.PedersenSuite.Q)
+	X := make([]big.Int, election.Base.Threshold+1)
 	for i := 0; i < len(a); i++ {
 		// X[i] = g^a[i]
 		X[i].Exp(&n.conf.PedersenSuite.G, &a[i], &n.conf.PedersenSuite.P)
@@ -30,7 +30,7 @@ func (n *node) PedersenDkg(election *types.Election) {
 	f := func(id int) big.Int {
 		base := big.NewInt(int64(id))
 		sum := a[0]
-		for i := 1; i <= n.conf.PedersenSuite.T; i++ {
+		for i := 1; i <= election.Base.Threshold; i++ {
 			exp := big.NewInt(int64(i))
 			factor := new(big.Int).Exp(base, exp, nil)
 			tmp := new(big.Int).Mul(&a[i], factor)
@@ -137,7 +137,7 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 	n.dkgMutex.Unlock()
 
 	myMixnetID := big.NewInt(int64(n.GetMyMixnetServerID(election) + 1))
-	isValid := n.VerifyEquation(myMixnetID, &dkgMessage.Share, dkgMessage.X)
+	isValid := n.VerifyEquation(myMixnetID, &dkgMessage.Share, dkgMessage.X, election.Base.Threshold)
 
 	n.sendDKGShareValidationMessage(dkgMessage.ElectionID, election.Base.MixnetServers, dkgMessage.MixnetServerID, isValid)
 
@@ -234,7 +234,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 		}
 	} else {
 		mixnetServerInfo.ComplainedCnt++
-		if mixnetServerInfo.ComplainedCnt > n.conf.PedersenSuite.T {
+		if mixnetServerInfo.ComplainedCnt > election.Base.Threshold {
 			mixnetServerInfo.QualifiedStatus = types.DISQUALIFIED
 			mixnetServerInfo.X[0] = *big.NewInt(1)
 			if n.ShouldSendElectionReadyMessage(election) {
@@ -319,7 +319,7 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 		j := big.NewInt(int64(dkgRevealShareMessage.MixnetServerID))
 		share := dkgRevealShareMessage.Share
 		X := election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X
-		isValid := n.VerifyEquation(j, &share, X)
+		isValid := n.VerifyEquation(j, &share, X, election.Base.Threshold)
 
 		if !isValid {
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
@@ -540,10 +540,10 @@ func (n *node) ShouldSendElectionReadyMessage(election *types.Election) bool {
 
 // VerifyEquation verifies if the received share is valid as a part of the second step
 // of the Pedersen DKG protocol.
-func (n *node) VerifyEquation(j *big.Int, share *big.Int, X []big.Int) bool {
+func (n *node) VerifyEquation(j *big.Int, share *big.Int, X []big.Int, t int) bool {
 	shareVal := new(big.Int).Exp(&n.conf.PedersenSuite.G, share, &n.conf.PedersenSuite.P)
 	productVal := new(big.Int).SetInt64(1)
-	for k := 0; k <= n.conf.PedersenSuite.T; k++ {
+	for k := 0; k <= t; k++ {
 		exp := new(big.Int).Exp(j, big.NewInt(int64(k)), nil)
 		factor := new(big.Int).Exp(&X[k], exp, &n.conf.PedersenSuite.P)
 		productVal.Mul(productVal, factor)
@@ -588,7 +588,7 @@ func (n *node) IsElectionStarted(election *types.Election) bool {
 // initiating the election
 func (n *node) GetFirstQualifiedInitiator(election *types.Election) string {
 	for i := 0; i < len(election.Base.MixnetServersPoints); i++ {
-		if election.Base.MixnetServersPoints[i] > n.conf.PedersenSuite.T {
+		if election.Base.MixnetServersPoints[i] > election.Base.Threshold {
 			return election.Base.MixnetServers[i]
 		}
 	}

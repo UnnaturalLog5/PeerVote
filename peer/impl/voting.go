@@ -22,6 +22,7 @@ func (n *node) AnnounceElection(title, description string, choices, mixnetServer
 
 	electionID := xid.New().String()
 	mixnetServersPoints := make([]int, len(mixnetServers))
+	threshold := len(mixnetServers)/2 + len(mixnetServers)%2
 	initiators := make(map[string]big.Int)
 
 	announceElectionMessage := types.AnnounceElectionMessage{
@@ -44,6 +45,7 @@ func (n *node) AnnounceElection(title, description string, choices, mixnetServer
 			// Incremented when mixnet server is among qualified nodes in types.ElectionReadyMessage
 			MixnetServersPoints: mixnetServersPoints,
 
+			Threshold:        threshold,
 			ElectionReadyCnt: 0,
 			Initiators:       initiators,
 		},
