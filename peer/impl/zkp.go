@@ -13,6 +13,7 @@ import (
 	"crypto/elliptic"
 	cryptorand "crypto/rand"
 	"fmt"
+	"go.dedis.ch/cs438/types"
 	"math/big"
 
 	"golang.org/x/xerrors"
@@ -25,11 +26,6 @@ const (
 	SHUFFLE_LABEL = "shuffle_LABEL"
 	SCALAR_SIZE   = 32
 )
-
-type Point struct {
-	X *big.Int
-	Y *big.Int
-}
 
 type Value []byte
 
@@ -50,7 +46,7 @@ type Proof struct {
 
 type ShuffleInstance struct {
 	Curve    elliptic.Curve
-	pPoint   Point
+	pPoint   types.Point
 	ctBefore []ElGamalCipherText
 	ctAfter  []ElGamalCipherText
 }
@@ -82,20 +78,20 @@ type ShuffleProof struct {
 }
 
 type ElGamalCipherText struct {
-	ct1 Point
-	ct2 Point
+	ct1 types.Point
+	ct2 types.Point
 }
 
-func (ct *ElGamalCipherText) GetCt1() Point {
+func (ct *ElGamalCipherText) GetCt1() types.Point {
 	return ct.ct1
 }
 
-func (ct *ElGamalCipherText) GetCt2() Point {
+func (ct *ElGamalCipherText) GetCt2() types.Point {
 	return ct.ct2
 }
 
-func NewPoint(px, py *big.Int) Point {
-	return Point{
+func NewPoint(px, py *big.Int) types.Point {
+	return types.Point{
 		X: px,
 		Y: py,
 	}
@@ -118,7 +114,7 @@ func NewProofExtended(proofType string, curve elliptic.Curve, pPoint, cPoint, ch
 	}
 }
 
-func NewShuffleInstance(curve elliptic.Curve, pPoint Point, ctBefore, ctAfter []ElGamalCipherText) *ShuffleInstance {
+func NewShuffleInstance(curve elliptic.Curve, pPoint types.Point, ctBefore, ctAfter []ElGamalCipherText) *ShuffleInstance {
 	return &ShuffleInstance{
 		Curve:    curve,
 		pPoint:   pPoint,
@@ -135,7 +131,7 @@ func NewShuffleWitness(permList []uint32, RscalarList []big.Int) *ShuffleWitness
 }
 
 // The function computes the non-interactive proof of knowledge of the DLOG (a.k.a Schnorr's proof)
-func ProveDlog(secret Value, pPoint Point, curve elliptic.Curve) (*Proof, error) {
+func ProveDlog(secret Value, pPoint types.Point, curve elliptic.Curve) (*Proof, error) {
 
 	// Derive parameters of the elliptic curve
 	curveParams := curve.Params()
@@ -168,7 +164,7 @@ func ProveDlog(secret Value, pPoint Point, curve elliptic.Curve) (*Proof, error)
 	commitScalarBytes := trPrg.GetRandomness(SCALAR_SIZE)
 	fmt.Printf("In ProveDlog, commitScalarBytes length: %v\n", len(commitScalarBytes))
 
-	cPoint := Point{}
+	cPoint := types.Point{}
 
 	// Create commitment Point (cPoint=c*B, where B is the base point of the curve)
 	cPoint.X, cPoint.Y = curve.ScalarBaseMult(commitScalarBytes)
@@ -227,12 +223,12 @@ func VerifyDlog(proof *Proof) (bool, error) {
 	fmt.Printf("In VerifyDlog, challBytes: %v\n", challBytes)
 
 	// Create placeholder for the l.h.s and the r.h.s of the final check
-	point01 := Point{}
-	point02 := Point{}
+	point01 := types.Point{}
+	point02 := types.Point{}
 
 	// Create placeholder for the instance Pand the commitment Point in the proof
-	pPoint := Point{}
-	cPoint := Point{}
+	pPoint := types.Point{}
+	cPoint := types.Point{}
 
 	// Computes z*G, where G is the base point, and z (a.k.a result) is z=chall*x+c
 	// This is what is "received" by the verifier from the prover
@@ -255,7 +251,8 @@ func VerifyDlog(proof *Proof) (bool, error) {
 // Proves that the two values P = x*G and P' = x*G' have the same DLOG x (a.k.a the Chaum-Pedersen proof)
 // Essentially, this corresponds to running two Schnorr proofs in parallel.
 // For details, see e.x: https://crypto.stackexchange.com/questions/99262/chaum-pedersen-protocol
-func ProveDlogEq(secret Value, pPoint Point, bPointOther Point, pPointOther Point, curve elliptic.Curve) (*Proof, error) {
+func ProveDlogEq(secret Value, pPoint types.Point, bPointOther types.Point, pPointOther types.Point,
+	curve elliptic.Curve) (*Proof, error) {
 
 	// Derive parameters of the elliptic curve
 	curveParams := curve.Params()
@@ -298,8 +295,8 @@ func ProveDlogEq(secret Value, pPoint Point, bPointOther Point, pPointOther Poin
 	commitScalarBytes := trPrg.GetRandomness(SCALAR_SIZE)
 
 	// Create placeholders for the two commitment points
-	cPoint := Point{}
-	cPointOther := Point{}
+	cPoint := types.Point{}
+	cPointOther := types.Point{}
 
 	// Compute cPoint = c*G where G is the base point of the curve
 	cPoint.X, cPoint.Y = curve.ScalarBaseMult(commitScalarBytes)
@@ -363,41 +360,41 @@ func VerifyDlogEq(proof *Proof) (bool, error) {
 	// Begin deriving components for checking if P = x*G
 
 	// Derive P from the proof
-	pPoint := Point{}
+	pPoint := types.Point{}
 	pPoint.X, pPoint.Y = elliptic.UnmarshalCompressed(proof.curve, proof.pPoint)
 
 	// Compute chall*P
-	gAddend01 := Point{}
+	gAddend01 := types.Point{}
 	gAddend01.X, gAddend01.Y = proof.curve.ScalarMult(pPoint.X, pPoint.Y, challBytes)
 
 	// Compute z*G (where z=c-chall*x)
-	gAddend02 := Point{}
+	gAddend02 := types.Point{}
 	gAddend02.X, gAddend02.Y = proof.curve.ScalarBaseMult(proof.result.Bytes())
 
 	// Compute chall*P + z*G
-	resultFirst := Point{}
+	resultFirst := types.Point{}
 	resultFirst.X, resultFirst.Y = proof.curve.Add(gAddend01.X, gAddend01.Y, gAddend02.X, gAddend02.Y)
 
 	// Begin deriving components for checking if P=x*G
 
-	gPrimeAddend01 := Point{}
-	pPointOther := Point{}
+	gPrimeAddend01 := types.Point{}
+	pPointOther := types.Point{}
 	pPointOther.X, pPointOther.Y = elliptic.UnmarshalCompressed(proof.curve, proof.pPointOther)
 	gPrimeAddend01.X, gPrimeAddend01.Y = proof.curve.ScalarMult(pPointOther.X, pPointOther.Y, challBytes)
 
 	// Checks for the other pair (corresponds to checks for G')
-	bPointOther := Point{}
-	gPrimeAddend02 := Point{}
+	bPointOther := types.Point{}
+	gPrimeAddend02 := types.Point{}
 	bPointOther.X, bPointOther.Y = elliptic.UnmarshalCompressed(proof.curve, proof.bPointOther)
 	gPrimeAddend02.X, gPrimeAddend02.Y = proof.curve.ScalarMult(bPointOther.X, bPointOther.Y, proof.result.Bytes())
 
-	resultSecond := Point{}
+	resultSecond := types.Point{}
 	resultSecond.X, resultSecond.Y = proof.curve.Add(gPrimeAddend01.X, gPrimeAddend01.Y, gPrimeAddend02.X, gPrimeAddend02.Y)
 
-	cPoint := Point{}
+	cPoint := types.Point{}
 	cPoint.X, cPoint.Y = elliptic.UnmarshalCompressed(proof.curve, proof.cPoint)
 
-	cPointOther := Point{}
+	cPointOther := types.Point{}
 	cPointOther.X, cPointOther.Y = elliptic.UnmarshalCompressed(proof.curve, proof.cPointOther)
 	return checkBytes &&
 		cPoint.X.Cmp(resultFirst.X) == 0 && cPoint.Y.Cmp(resultFirst.Y) == 0 &&
@@ -409,12 +406,12 @@ func VerifyDlogEq(proof *Proof) (bool, error) {
 // The proof generation can be parsed into the two cases:
 // 1. For the true case: Run the regular Schnorr protocol
 // 2. For the fake case: Use simulator to create an accepting transcript
-func ProveDlogOr(secret Value, pPoint Point, secretOther Value, pPointOther Point, secretBit bool, curve elliptic.Curve) (*Proof, error) {
+func ProveDlogOr(secret Value, pPoint types.Point, secretOther Value, pPointOther types.Point, secretBit bool, curve elliptic.Curve) (*Proof, error) {
 
 	curveParams := curve.Params()
 	var trueSecret Value
-	var truepPoint Point
-	var fakepPoint Point
+	var truepPoint types.Point
+	var fakepPoint types.Point
 	if secretBit {
 		trueSecret = secret
 		truepPoint = pPoint
@@ -463,7 +460,7 @@ func ProveDlogOr(secret Value, pPoint Point, secretOther Value, pPointOther Poin
 	commitScalarBytes := trPrg.GetRandomness(SCALAR_SIZE)
 
 	// For the true case: Generate cPoint =  c*G, where G is the base point
-	cPoint := Point{}
+	cPoint := types.Point{}
 	cPoint.X, cPoint.Y = curve.ScalarBaseMult(commitScalarBytes)
 	cPointCompressed := elliptic.MarshalCompressed(curve, cPoint.X, cPoint.Y)
 
@@ -618,7 +615,7 @@ func VerifyDlogOr(proof *Proof) (bool, error) {
 
 // Based on the choise of the chall, derives the fake simulated (a.k.a) fake transcript for the Schnorr's proof
 // Utilizes the c-simultability property of the Sigma protocols
-func SimulatorDlog(challBytes []byte, trPRG *TranscriptRng, pPoint Point, curve elliptic.Curve) ([]byte, []byte, *big.Int) {
+func SimulatorDlog(challBytes []byte, trPRG *TranscriptRng, pPoint types.Point, curve elliptic.Curve) ([]byte, []byte, *big.Int) {
 
 	curveParams := curve.Params()
 
@@ -628,7 +625,7 @@ func SimulatorDlog(challBytes []byte, trPRG *TranscriptRng, pPoint Point, curve 
 	blindScalar = blindScalar.Mod(blindScalar, curveParams.N)
 
 	// Compute z*G
-	blindPoint := Point{}
+	blindPoint := types.Point{}
 	fmt.Printf("In SimulatorDlog, multiplying base point with value %v\n", blindScalar.Bytes())
 	blindPoint.X, blindPoint.Y = curve.ScalarBaseMult(blindScalar.Bytes())
 
@@ -637,7 +634,7 @@ func SimulatorDlog(challBytes []byte, trPRG *TranscriptRng, pPoint Point, curve 
 	challScalar := new(big.Int).SetBytes(challBytes)
 
 	// Create placeholder for the -chall*P point
-	challpPoint := Point{}
+	challpPoint := types.Point{}
 
 	// First compute -P given P
 	challpPoint.X, challpPoint.Y = curve.ScalarMult(pPoint.X, pPoint.Y, minusOneScalar.Bytes())
@@ -647,7 +644,7 @@ func SimulatorDlog(challBytes []byte, trPRG *TranscriptRng, pPoint Point, curve 
 
 	// Finally compute the the first message (in the original proof c*G)
 	// As: c*G = z*G - chall*P
-	cPoint := Point{}
+	cPoint := types.Point{}
 	cPoint.X, cPoint.Y = curve.Add(blindPoint.X, blindPoint.Y, challpPoint.X, challpPoint.Y)
 	cPointCompressed := elliptic.MarshalCompressed(curve, cPoint.X, cPoint.Y)
 
@@ -671,12 +668,12 @@ func VerifyDlogRelation(proof *Proof) bool {
 	curve := proof.curve
 
 	// Create the placeholder for the l.h.s and the r.h.s of the check
-	pointlhs := Point{}
-	pointrhs := Point{}
+	pointlhs := types.Point{}
+	pointrhs := types.Point{}
 
 	// Create the placholders for the proof instance and commitment point
-	pPoint := Point{}
-	cPoint := Point{}
+	pPoint := types.Point{}
+	cPoint := types.Point{}
 
 	fmt.Printf("In VerifyDlogRelation, cPointCompressed %v\n", proof.cPoint)
 	fmt.Printf("In VerifyDlogRelation, challBytes %v\n", proof.verifierChall)
@@ -804,10 +801,10 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 	//Compute v=\theta*G
 	//Compute w=\sigma*G
 	//Compute u=\lambda*G
-	tPoint := Point{}
-	vPoint := Point{}
-	wPoint := Point{}
-	uPoint := Point{}
+	tPoint := types.Point{}
+	vPoint := types.Point{}
+	wPoint := types.Point{}
+	uPoint := types.Point{}
 
 	tPoint.X, tPoint.Y = instance.Curve.ScalarBaseMult(tauScalarBytes)
 	vPoint.X, vPoint.Y = instance.Curve.ScalarBaseMult(thetaScalarBytes)
@@ -825,9 +822,9 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 	fmt.Printf("In ProveShuffle, uPoint result is (%v,%v)\n", uPoint.X, uPoint.Y)
 
 	// Prover STEP 01: Compute U_i = \lambda_i * G, where G is the base point
-	uPointList := make([]Point, 0)
+	uPointList := make([]types.Point, 0)
 	for i := 0; i < len(witness.PermList); i++ {
-		uP := Point{}
+		uP := types.Point{}
 		fmt.Printf("In ProveShuffle, for index %d, lambdaScalar[i] is: %v\n", i, new(big.Int).SetBytes(lambdaList[i]))
 		uP.X, uP.Y = instance.Curve.ScalarBaseMult(lambdaList[i])
 		fmt.Printf("In ProveShuffle, for index %d uPoint result is (%v,%v)\n", i, uP.X, uP.Y)
@@ -837,14 +834,14 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 	// Prover STEP 01: Compute G'=\phi*G + \sum_i \phi_i*ct_{i,1}
 
 	//First compute the \phi*G
-	gPrimePoint := Point{}
+	gPrimePoint := types.Point{}
 	gPrimePoint.X, gPrimePoint.Y = instance.Curve.ScalarBaseMult(phiScalarBytes)
 	fmt.Printf("In ProveShuffle, PhiScalar is: %v\n", new(big.Int).SetBytes(phiScalarBytes))
 	fmt.Printf("In ProveShuffle, gPrimePoint, initial result is (%v,%v)\n", gPrimePoint.X, gPrimePoint.Y)
 
 	// Then compute the sum by calcluating addends and add them at each step to the running value of G'
 	for i := 0; i < len(witness.PermList); i++ {
-		addend := Point{}
+		addend := types.Point{}
 		fmt.Printf("In ProveShuffle, for i: %d, PhiScalar[i] is: %v\n", i, new(big.Int).SetBytes(phiList[i]))
 		fmt.Printf("In ProveShuffle, for i: %d, reEncBeforeList[i] is (%v,%v)\n", i, reEncBeforeList[i].X, reEncBeforeList[i].Y)
 
@@ -861,14 +858,14 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 	//Compute M'=\phi*P + \sum_i \phi_i*ct_{i,2}
 
 	//First compute  \phi*P
-	mPrimePoint := Point{}
+	mPrimePoint := types.Point{}
 	mPrimePoint.X, mPrimePoint.Y = instance.Curve.ScalarMult(instance.pPoint.X, instance.pPoint.Y, phiScalarBytes)
 	fmt.Printf("In ProveShuffle, mPrimePoint initial result is (%v,%v)\n", mPrimePoint.X, mPrimePoint.Y)
 
 	// Then compute the sum by calcluating addends and add them at each step to the running value of M'
 	for i := 0; i < len(instance.ctBefore); i++ {
 		// Computes addend = phi[i] * ct_{i,2}
-		addend := Point{}
+		addend := types.Point{}
 		addend.X, addend.Y = instance.Curve.ScalarMult(ctMsgBeforeList[i].X, ctMsgBeforeList[i].Y, phiList[i])
 		fmt.Printf("In ProveShuffle, reEncBlindedPoint result is (%v,%v)\n", addend.X, addend.Y)
 		mPrimePoint.X, mPrimePoint.Y = instance.Curve.Add(mPrimePoint.X, mPrimePoint.Y, addend.X, addend.Y)
@@ -880,9 +877,9 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 	tauScalar := new(big.Int).SetBytes(tauScalarBytes)
 	fmt.Printf("In ProveShuffle, tauScalar is: %v\n", tauScalar)
 
-	tCapPointList := make([]Point, 0)
+	tCapPointList := make([]types.Point, 0)
 	for i := 0; i < len(witness.PermList); i++ {
-		tCapBlindPoint := Point{}
+		tCapBlindPoint := types.Point{}
 
 		// Derive \lambda_i
 		lambdaListScalar := new(big.Int).SetBytes(lambdaList[i])
@@ -922,11 +919,11 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 
 	//First derive \theta as a scalar
 	thetaScalar := new(big.Int).SetBytes(thetaScalarBytes)
-	vCapPointList := make([]Point, 0)
+	vCapPointList := make([]types.Point, 0)
 	fmt.Printf("In ProveShuffle, thetaScalar is: %v\n", thetaScalar)
 
 	for i := 0; i < len(witness.PermList); i++ {
-		vCapBlindedPoint := Point{}
+		vCapBlindedPoint := types.Point{}
 		// Set the placeholder for \theta * r_i
 		thetaRScalar := new(big.Int).SetUint64(0)
 
@@ -974,7 +971,7 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 	}
 
 	//Compute \cap{V}
-	vCapPoint := Point{}
+	vCapPoint := types.Point{}
 
 	// Compute the placeholders for \theta *\phi and \tau * \lambda
 	thetaPhiScalar := new(big.Int).SetUint64(0)
@@ -1030,7 +1027,7 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 	fmt.Printf("In ProveShuffle, vCapPoint final is (%v,%v)\n", vCapPoint.X, vCapPoint.Y)
 
 	// Compute \cap{W_i}
-	wCapPointList := make([]Point, 0)
+	wCapPointList := make([]types.Point, 0)
 	sigmaScalar := new(big.Int).SetBytes(sigmaScalarBytes)
 	fmt.Printf("In ProveShuffle, computing wCapPointList, value of sigmaScalar is: %v\n", sigmaScalar)
 
@@ -1067,14 +1064,14 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 		fmt.Printf("In ProveShuffle, loop for wCapPoint[i], index %d, chosen perm index %d, resultScalar is: %v\n", i, ind, resultScalar)
 
 		// Compute \cap{W_i} as result*G
-		wCapBlindPoint := Point{}
+		wCapBlindPoint := types.Point{}
 		wCapBlindPoint.X, wCapBlindPoint.Y = instance.Curve.ScalarBaseMult(resultScalar.Bytes())
 		fmt.Printf("In ProveShuffle, loop for wCapPoint[i], index %d, chosen perm index %d, wCapBlindPoint is (%v,%v)\n", i, ind, wCapBlindPoint.X, wCapBlindPoint.Y)
 		wCapPointList = append(wCapPointList, wCapBlindPoint)
 	}
 
 	//Compute  \cap{W}
-	wCapPoint := Point{}
+	wCapPoint := types.Point{}
 
 	// \cap{W} =
 	wCapScalar := new(big.Int).SetUint64(0)
@@ -1255,7 +1252,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	ctMsgBeforeByteList := MarshalPointList(ctMsgBeforeList, curve)
 	ctMsgAfterByteList := MarshalPointList(ctMsgAfterList, curve)
 
-	pPoint := Point{
+	pPoint := types.Point{
 		X: proof.instance.pPoint.X,
 		Y: proof.instance.pPoint.Y,
 	}
@@ -1298,15 +1295,15 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 
 	//Parse all the points for the final verifier's check
 
-	tPoint := Point{}
-	wPoint := Point{}
-	vPoint := Point{}
-	uPoint := Point{}
+	tPoint := types.Point{}
+	wPoint := types.Point{}
+	vPoint := types.Point{}
+	uPoint := types.Point{}
 
-	gPrimePoint := Point{}
-	mPrimePoint := Point{}
-	vCapPoint := Point{}
-	wCapPoint := Point{}
+	gPrimePoint := types.Point{}
+	mPrimePoint := types.Point{}
+	vCapPoint := types.Point{}
+	wCapPoint := types.Point{}
 
 	tPoint.X, tPoint.Y = elliptic.UnmarshalCompressed(curve, proof.tPoint)
 	wPoint.X, wPoint.Y = elliptic.UnmarshalCompressed(curve, proof.wPoint)
@@ -1325,14 +1322,14 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	// fmt.Printf("wCapPointList, %v\n", wCapPointList)
 
 	//Corresponds to check (5.20) in notes
-	sGpoint := Point{}
+	sGpoint := types.Point{}
 	sGpoint.X, sGpoint.Y = curve.ScalarBaseMult(proof.sZeroScalar.Bytes())
 
 	fmt.Printf("In VerifyShuffle, sZeroScalar is %v\n", proof.sZeroScalar)
 	fmt.Printf("In VerifyShuffle, sGpoint, initial value is (%v,%v)\n", sGpoint.X, sGpoint.Y)
 
 	for i, sScalar := range proof.sList {
-		addend := Point{}
+		addend := types.Point{}
 		fmt.Printf("In VerifyShuffle, reEncBeforeList[i] is (%v,%v)\n", reEncBeforeList[i].X, reEncBeforeList[i].Y)
 		fmt.Printf("In VerifyShuffle, sScalar is %v\n", sScalar)
 
@@ -1343,14 +1340,14 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	}
 	fmt.Printf("In VerifyShuffle, sGpoint,final is (%v,%v)\n", sGpoint.X, sGpoint.Y)
 
-	betaGprimePoint := Point{
+	betaGprimePoint := types.Point{
 		X: new(big.Int).Set(gPrimePoint.X),
 		Y: new(big.Int).Set(gPrimePoint.Y),
 	}
 	fmt.Printf("In VerifyShuffle, betaGprimePoint initial is (%v,%v)\n", betaGprimePoint.X, betaGprimePoint.Y)
 
 	for i, challBytes := range challBytesList {
-		addend := Point{}
+		addend := types.Point{}
 		fmt.Printf("In VerifyShuffle, for index %d, reEncAfterList[i] is (%v,%v)\n", i, reEncAfterList[i].X, reEncAfterList[i].Y)
 		addend.X, addend.Y = curve.ScalarMult(reEncAfterList[i].X, reEncAfterList[i].Y, challBytes)
 		fmt.Printf("In VerifyShuffle, for index %d, addend is (%v,%v)\n", i, reEncAfterList[i].X, reEncAfterList[i].Y)
@@ -1364,12 +1361,12 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 
 	//Corresponds to check (5.21) in notes
 
-	sMpoint := Point{}
+	sMpoint := types.Point{}
 	sMpoint.X, sMpoint.Y = curve.ScalarMult(pPoint.X, pPoint.Y, proof.sZeroScalar.Bytes())
 	fmt.Printf("In VerifyShuffle, sMpoint initial is (%v,%v)\n", sMpoint.X, sMpoint.Y)
 
 	for i, s := range proof.sList {
-		addend := Point{}
+		addend := types.Point{}
 		fmt.Printf("In VerifyShuffle, for %d, ctMsgBefore[i] is (%v,%v)\n", i, ctMsgBeforeList[i].X, ctMsgBeforeList[i].Y)
 
 		addend.X, addend.Y = curve.ScalarMult(ctMsgBeforeList[i].X, ctMsgBeforeList[i].Y, s.Bytes())
@@ -1379,7 +1376,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	}
 	fmt.Printf("In VerifyShuffle, sMpoint final is (%v,%v)\n", sMpoint.X, sMpoint.Y)
 
-	challMprimePoint := Point{
+	challMprimePoint := types.Point{
 		X: new(big.Int).Set(mPrimePoint.X),
 		Y: new(big.Int).Set(mPrimePoint.Y),
 	}
@@ -1387,7 +1384,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	fmt.Printf("In VerifyShuffle, challMprimePoint initial is (%v,%v)\n", challMprimePoint.X, challMprimePoint.Y)
 
 	for i, challBytes := range challBytesList {
-		addend := Point{}
+		addend := types.Point{}
 		fmt.Printf("In VerifyShuffle, for index %d, ctMsgAfterList is (%v,%v)\n", i, ctMsgAfterList[i].X, ctMsgAfterList[i].Y)
 		addend.X, addend.Y = curve.ScalarMult(ctMsgAfterList[i].X, ctMsgAfterList[i].Y, challBytes)
 		fmt.Printf("In VerifyShuffle,for index %d, challMprimePoint addend is (%v,%v)\n", i, addend.X, addend.Y)
@@ -1401,7 +1398,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	checkO3 := sMpoint.X.Cmp(challMprimePoint.X) == 0 && sMpoint.Y.Cmp(challMprimePoint.Y) == 0
 
 	//Corresponds to check (5.22) in notes
-	sBetaSqWGPoint := Point{}
+	sBetaSqWGPoint := types.Point{}
 
 	//Initialize point to be s0*W
 	sBetaSqWGPoint.X, sBetaSqWGPoint.Y = curve.ScalarMult(wPoint.X, wPoint.Y, proof.sZeroScalar.Bytes())
@@ -1440,21 +1437,21 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	}
 	fmt.Printf("In VerifyShuffle, sqDiff final is %v\n", sqDiff)
 
-	sqDiffGPoint := Point{}
+	sqDiffGPoint := types.Point{}
 	sqDiffGPoint.X, sqDiffGPoint.Y = curve.ScalarBaseMult(sqDiff.Bytes())
 	fmt.Printf("In VerifyShuffle, sqDiffGPoint is (%v,%v)\n", sqDiffGPoint.X, sqDiffGPoint.Y)
 
 	sBetaSqWGPoint.X, sBetaSqWGPoint.Y = curve.Add(sBetaSqWGPoint.X, sBetaSqWGPoint.Y, sqDiffGPoint.X, sqDiffGPoint.Y)
 	fmt.Printf("In VerifyShuffle, sBetaSqWGPoint final is (%v,%v)\n", sBetaSqWGPoint.X, sBetaSqWGPoint.Y)
 
-	betawCapPoint := Point{
+	betawCapPoint := types.Point{
 		X: new(big.Int).Set(wCapPoint.X),
 		Y: new(big.Int).Set(wCapPoint.Y),
 	}
 	fmt.Printf("In VerifyShuffle, betawCapPoint initial is (%v,%v)\n", betawCapPoint.X, betawCapPoint.Y)
 
 	for i, challBytes := range challBytesList {
-		addend := Point{}
+		addend := types.Point{}
 		addend.X, addend.Y = curve.ScalarMult(wCapPointList[i].X, wCapPointList[i].Y, challBytes)
 		fmt.Printf("In VerifyShuffle, addend for betawCapPoint is (%v,%v)\n", addend.X, addend.Y)
 
@@ -1467,12 +1464,12 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 
 	//Corresponds to check (5.23) in notes
 
-	dGpoint := Point{}
+	dGpoint := types.Point{}
 	dGpoint.X, dGpoint.Y = curve.ScalarBaseMult(proof.dScalar.Bytes())
 
 	fmt.Printf("In VerifyShuffle, dGPoint final is (%v,%v)\n", dGpoint.X, dGpoint.Y)
 
-	challSqUPoint := Point{
+	challSqUPoint := types.Point{
 		X: new(big.Int).Set(uPoint.X),
 		Y: new(big.Int).Set(uPoint.Y),
 	}
@@ -1480,7 +1477,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	fmt.Printf("In VerifyShuffle, challSqUPoint initial is (%v,%v)\n", challSqUPoint.X, challSqUPoint.Y)
 
 	for i, challBytes := range challBytesList {
-		addend := Point{}
+		addend := types.Point{}
 		challScalar := new(big.Int).SetBytes(challBytes)
 		challSqScalar := challScalar.Mod(challScalar.Mul(challScalar, challScalar), curveParams.N)
 		fmt.Printf("In VerifyShuffle, for index %d challSq is %v\n", i, challSqScalar)
@@ -1499,11 +1496,11 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	//Corresponds to check (5.24) in notes
 
 	//Compute lhs of the (5.24) check
-	dTPoint := Point{}
+	dTPoint := types.Point{}
 	dTPoint.X, dTPoint.Y = curve.ScalarMult(tPoint.X, tPoint.Y, proof.dScalar.Bytes())
 	fmt.Printf("In VerifyShuffle, value of dTPoint is (%v,%v)\n", dTPoint.X, dTPoint.Y)
 
-	sZeroVPoint := Point{}
+	sZeroVPoint := types.Point{}
 	sZeroVPoint.X, sZeroVPoint.Y = curve.ScalarMult(vPoint.X, vPoint.Y, proof.sZeroScalar.Bytes())
 	fmt.Printf("In VerifyShuffle, value of sZeroVPoint is (%v,%v)\n", sZeroVPoint.X, sZeroVPoint.Y)
 
@@ -1547,12 +1544,12 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	}
 	fmt.Printf("In VerifyShuffle, cubeDiff final is %v\n", cubeDiff)
 
-	cubeDiffGPoint := Point{}
+	cubeDiffGPoint := types.Point{}
 	cubeDiffGPoint.X, cubeDiffGPoint.Y = curve.ScalarBaseMult(cubeDiff.Bytes())
 
 	fmt.Printf("In VerifyShuffle, value of cubeDiffGPoint is (%v,%v)\n", cubeDiffGPoint.X, cubeDiffGPoint.Y)
 
-	lhs := Point{}
+	lhs := types.Point{}
 	lhs.X, lhs.Y = curve.Add(dTPoint.X, dTPoint.Y, sZeroVPoint.X, sZeroVPoint.Y)
 	fmt.Printf("In VerifyShuffle, value of sume dT + sZeroV is (%v,%v)\n", lhs.X, lhs.Y)
 
@@ -1561,7 +1558,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	fmt.Printf("In VerifyShuffle, final value of lhs is (%v,%v)\n", lhs.X, lhs.Y)
 
 	//Compute rhs of (5.24) check
-	rhs := Point{
+	rhs := types.Point{
 		X: new(big.Int).Set(vCapPoint.X),
 		Y: new(big.Int).Set(vCapPoint.Y),
 	}
@@ -1569,8 +1566,8 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	fmt.Printf("In VerifyShuffle, initial value of rhs is (%v,%v)\n", rhs.X, rhs.Y)
 
 	for i := 0; i < len(challBytesList); i++ {
-		challVcapPoint := Point{}
-		challSqTCapPoint := Point{}
+		challVcapPoint := types.Point{}
+		challSqTCapPoint := types.Point{}
 
 		chall := new(big.Int).SetBytes(challBytesList[i])
 
@@ -1628,11 +1625,11 @@ func checkChallBytesLists(derived, actual [][]byte) bool {
 //Helper functions for this class
 /*********************************************************************/
 
-func ElGamalEncryption(curve elliptic.Curve, pPoint *Point, rScalar *big.Int, msg *big.Int) *ElGamalCipherText {
-	ct1 := Point{}
-	ct2 := Point{}
-	msgPoint := Point{}
-	rpPoint := Point{}
+func ElGamalEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big.Int, msg *big.Int) *ElGamalCipherText {
+	ct1 := types.Point{}
+	ct2 := types.Point{}
+	msgPoint := types.Point{}
+	rpPoint := types.Point{}
 
 	msgPoint.X, msgPoint.Y = curve.ScalarBaseMult(msg.Bytes())
 	rBytes := rScalar.Bytes()
@@ -1648,10 +1645,10 @@ func ElGamalEncryption(curve elliptic.Curve, pPoint *Point, rScalar *big.Int, ms
 	}
 }
 
-func ElGamalReEncryption(curve elliptic.Curve, pPoint *Point, rScalar *big.Int, cipherText *ElGamalCipherText) *ElGamalCipherText {
-	ct1 := Point{}
-	ct2 := Point{}
-	rpPoint := Point{}
+func ElGamalReEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big.Int, cipherText *ElGamalCipherText) *ElGamalCipherText {
+	ct1 := types.Point{}
+	ct2 := types.Point{}
+	rpPoint := types.Point{}
 
 	rBytes := rScalar.Bytes()
 	ct1.X, ct1.Y = curve.ScalarBaseMult(rBytes)

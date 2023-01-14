@@ -21,7 +21,7 @@ type ElectionBase struct {
 	MixnetServersPoints []int // Incremented when mixnet server is among qualified nodes in types.ElectionReadyMessage
 	Threshold           int
 	ElectionReadyCnt    int
-	Initiators          map[string]big.Int
+	Initiators          map[string]Point
 }
 
 type Election struct {
@@ -103,7 +103,7 @@ const (
 // in Pedersen DKG protocol
 type MixnetServerInfo struct {
 	ReceivedShare   big.Int
-	X               []big.Int
+	X               []Point
 	VerifiedCnt     int
 	ComplainedCnt   int
 	QualifiedStatus int

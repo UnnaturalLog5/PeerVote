@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"crypto/elliptic"
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
@@ -20,11 +21,11 @@ import (
 func (n *node) PedersenDkg(election *types.Election) {
 	// Choose a random polynomial f(z) over Zq of degree t:
 	// f(z) = a0 + a1*z + ... + at*z^t
-	a := GenerateRandomPolynomial(election.Base.Threshold, &n.conf.PedersenSuite.Q)
-	X := make([]big.Int, election.Base.Threshold+1)
+	a := GenerateRandomPolynomial(election.Base.Threshold, elliptic.P256().Params().Params().N)
+	X := make([]types.Point, election.Base.Threshold+1)
 	for i := 0; i < len(a); i++ {
 		// X[i] = g^a[i]
-		X[i].Exp(&n.conf.PedersenSuite.G, &a[i], &n.conf.PedersenSuite.P)
+		X[i].X, X[i].Y = elliptic.P256().ScalarBaseMult(a[i].Bytes())
 	}
 
 	f := func(id int) big.Int {
@@ -36,7 +37,7 @@ func (n *node) PedersenDkg(election *types.Election) {
 			tmp := new(big.Int).Mul(&a[i], factor)
 			sum.Add(&sum, tmp)
 		}
-		return *new(big.Int).Mod(&sum, &n.conf.PedersenSuite.Q)
+		return *new(big.Int).Mod(&sum, elliptic.P256().Params().N)
 	}
 	myMixnetServerID := election.GetMyMixnetServerID(n.myAddr)
 	// Compute the share xij and send it to each mixnetServer
@@ -48,7 +49,7 @@ func (n *node) PedersenDkg(election *types.Election) {
 
 // sendDKGShareMessage creates a new types.DKGShareMessage, wraps it inside a
 // types.PrivateMessage and sends it secretly to mixnetServer
-func (n *node) sendDKGShareMessage(electionID string, mixnetServer string, mixnetServerID int, share big.Int, X []big.Int) {
+func (n *node) sendDKGShareMessage(electionID string, mixnetServer string, mixnetServerID int, share big.Int, X []types.Point) {
 
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKG Share Message")
 
@@ -214,7 +215,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 	if mixnetServerInfo == nil {
 		mixnetServerInfo = &types.MixnetServerInfo{
 			ReceivedShare:   big.Int{},
-			X:               make([]big.Int, len(election.Base.MixnetServers)),
+			X:               make([]types.Point, len(election.Base.MixnetServers)),
 			VerifiedCnt:     0,
 			ComplainedCnt:   0,
 			QualifiedStatus: types.NOT_DECIDED_YET,
@@ -236,7 +237,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 		mixnetServerInfo.ComplainedCnt++
 		if mixnetServerInfo.ComplainedCnt > election.Base.Threshold {
 			mixnetServerInfo.QualifiedStatus = types.DISQUALIFIED
-			mixnetServerInfo.X[0] = *big.NewInt(1)
+			mixnetServerInfo.X[0].X, mixnetServerInfo.X[0].Y = elliptic.P256().ScalarBaseMult(make([]byte, 32))
 			if n.ShouldSendElectionReadyMessage(election) {
 				n.dkgMutex.Unlock()
 				n.sendElectionReadyMessage(election)
@@ -323,7 +324,9 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 
 		if !isValid {
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
-			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0] = *big.NewInt(1)
+			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].X,
+				election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].Y =
+				elliptic.P256().ScalarBaseMult(make([]byte, 32))
 			if n.ShouldSendElectionReadyMessage(election) {
 				n.sendElectionReadyMessage(election)
 			}
@@ -468,6 +471,9 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 	}
 
 	n.dkgMutex.Unlock()
+
+	log.Info().Str("peerAddr", n.myAddr).Msgf("processing StartElectionMessage from %v done", pkt.Header.Source)
+
 	return nil
 }
 
@@ -534,25 +540,25 @@ func (n *node) ShouldSendElectionReadyMessage(election *types.Election) bool {
 
 // VerifyEquation verifies if the received share is valid as a part of the second step
 // of the Pedersen DKG protocol.
-func (n *node) VerifyEquation(j *big.Int, share *big.Int, X []big.Int, t int) bool {
-	shareVal := new(big.Int).Exp(&n.conf.PedersenSuite.G, share, &n.conf.PedersenSuite.P)
-	productVal := new(big.Int).SetInt64(1)
+func (n *node) VerifyEquation(j *big.Int, share *big.Int, X []types.Point, t int) bool {
+	shareValX, shareValY := elliptic.P256().ScalarBaseMult(share.Bytes())
+	productValX, productValY := elliptic.P256().ScalarBaseMult(make([]byte, 32))
 	for k := 0; k <= t; k++ {
 		exp := new(big.Int).Exp(j, big.NewInt(int64(k)), nil)
-		factor := new(big.Int).Exp(&X[k], exp, &n.conf.PedersenSuite.P)
-		productVal.Mul(productVal, factor)
-		productVal.Mod(productVal, &n.conf.PedersenSuite.P)
+		factorX, factorY := elliptic.P256().ScalarMult(X[k].X, X[k].Y, exp.Bytes())
+		productValX, productValY = elliptic.P256().Add(factorX, factorY, productValX, productValY)
 	}
 
-	return shareVal.Cmp(productVal) == 0
+	return shareValX.Cmp(productValX) == 0 && shareValY.Cmp(productValY) == 0
 }
 
 // ReconstructPublicKey reconstructs the public value of the distributed shared key
-func (n *node) ReconstructPublicKey(election *types.Election) big.Int {
-	productVal := new(big.Int).SetInt64(1)
+func (n *node) ReconstructPublicKey(election *types.Election) types.Point {
+	productValX, productValY := elliptic.P256().ScalarBaseMult(make([]byte, 32))
 	for _, server := range election.Base.MixnetServerInfos {
-		productVal.Mul(productVal, &server.X[0])
-		productVal.Mod(productVal, &n.conf.PedersenSuite.P)
+		productValX, productValY = elliptic.P256().Add(server.X[0].X, server.X[0].Y, productValX, productValY)
 	}
-	return *productVal
+
+	//
+	return NewPoint(productValX, productValY)
 }

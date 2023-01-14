@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"go.dedis.ch/cs438/types"
 	"math/big"
 )
 
@@ -86,7 +87,7 @@ func findNonZeroIndex(list []uint32) int {
 	return -1
 }
 
-func MarshalPointList(pointList []Point, curve elliptic.Curve) [][]byte {
+func MarshalPointList(pointList []types.Point, curve elliptic.Curve) [][]byte {
 	bytePointList := make([][]byte, 0)
 	for _, p := range pointList {
 		pBytes := elliptic.MarshalCompressed(curve, p.X, p.Y)
@@ -98,10 +99,10 @@ func MarshalPointList(pointList []Point, curve elliptic.Curve) [][]byte {
 	return bytePointList
 }
 
-func UnmarshalPointList(pointListBytes [][]byte, curve elliptic.Curve) []Point {
-	pointList := make([]Point, 0)
+func UnmarshalPointList(pointListBytes [][]byte, curve elliptic.Curve) []types.Point {
+	pointList := make([]types.Point, 0)
 	for _, p := range pointListBytes {
-		point := Point{}
+		point := types.Point{}
 		point.X, point.Y = elliptic.UnmarshalCompressed(curve, p)
 		pointList = append(pointList, point)
 	}
@@ -145,8 +146,8 @@ func MarshalUIntList(intList []uint32) [][]byte {
 	return intByteList
 }
 
-func MakeReencList(ctList []ElGamalCipherText) []Point {
-	pointList := make([]Point, 0)
+func MakeReencList(ctList []ElGamalCipherText) []types.Point {
+	pointList := make([]types.Point, 0)
 	for i := 0; i < len(ctList); i++ {
 		//fmt.Printf("In ProveShuffle,  is %v\n", ctMsgAfterList)
 		p := NewPoint(ctList[i].ct1.X, ctList[i].ct1.Y)
@@ -155,8 +156,8 @@ func MakeReencList(ctList []ElGamalCipherText) []Point {
 	return pointList
 }
 
-func MakeCtMsgList(ctList []ElGamalCipherText) []Point {
-	pointList := make([]Point, 0)
+func MakeCtMsgList(ctList []ElGamalCipherText) []types.Point {
+	pointList := make([]types.Point, 0)
 	for i := 0; i < len(ctList); i++ {
 		p := NewPoint(ctList[i].ct2.X, ctList[i].ct2.Y)
 		pointList = append(pointList, p)

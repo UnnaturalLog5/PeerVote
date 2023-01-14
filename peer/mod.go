@@ -1,7 +1,6 @@
 package peer
 
 import (
-	"go.dedis.ch/cs438/types"
 	"time"
 
 	"go.dedis.ch/cs438/registry"
@@ -84,7 +83,7 @@ type Configuration struct {
 	PaxosProposerRetry time.Duration
 
 	// PedersenSuite is the set of parameters used in Pedersen DKG protocol.
-	PedersenSuite types.PedersenSuite
+	//PedersenSuite types.PedersenSuite
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

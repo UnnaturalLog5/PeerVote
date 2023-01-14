@@ -2,7 +2,6 @@ package impl
 
 import (
 	"errors"
-	"math/big"
 	"time"
 
 	"github.com/rs/xid"
@@ -23,7 +22,7 @@ func (n *node) AnnounceElection(title, description string, choices, mixnetServer
 	electionID := xid.New().String()
 	mixnetServersPoints := make([]int, len(mixnetServers))
 	threshold := len(mixnetServers)/2 + len(mixnetServers)%2
-	initiators := make(map[string]big.Int)
+	initiators := make(map[string]types.Point)
 
 	announceElectionMessage := types.AnnounceElectionMessage{
 		Base: types.ElectionBase{

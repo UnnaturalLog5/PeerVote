@@ -17,23 +17,28 @@ import (
 // Threshold Cryptography, Secure Applications of Pedersen’s Distributed
 // Key Generation Protocol (Rosario Gennaro, Stanis9law Jarecki,
 // Hugo Krawczyk, and Tal Rabin)
-type PedersenSuite struct {
-	P big.Int
-	G big.Int
-	Q big.Int
-}
+//type PedersenSuite struct {
+//	P big.Int
+//	G big.Int
+//	Q big.Int
+//}
+//
+//var DefaultPedersenSuite = PedersenSuite{
+//	P: *big.NewInt(7), // Z*7
+//	G: *big.NewInt(2),                   // <2>
+//	Q: *big.NewInt(3),                   // <2> = {2, 4, 1}
+//}
 
-var DefaultPedersenSuite = PedersenSuite{
-	P: *big.NewInt(7), // Z*7
-	G: *big.NewInt(2), // <2>
-	Q: *big.NewInt(3), // <2> = {2, 4, 1}
+type Point struct {
+	X *big.Int
+	Y *big.Int
 }
 
 type DKGShareMessage struct {
 	ElectionID     string
 	MixnetServerID int
 	Share          big.Int
-	X              []big.Int
+	X              []Point
 }
 
 type DKGShareValidationMessage struct {
@@ -57,5 +62,5 @@ type DKGRevealShareMessage struct {
 type StartElectionMessage struct {
 	ElectionID string
 	Expiration time.Time
-	PublicKey  big.Int
+	PublicKey  Point
 }

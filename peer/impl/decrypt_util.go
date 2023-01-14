@@ -10,6 +10,7 @@ package impl
 import (
 	"crypto/elliptic"
 	"crypto/rand"
+	"go.dedis.ch/cs438/types"
 	"math/big"
 
 	"golang.org/x/xerrors"
@@ -22,15 +23,15 @@ type BSGSPoint struct {
 
 // Each party generates its' decryption share based on the ciphertext pair, and broadcasts it
 // together with the proof of the correct share generation (Chaum-Pedersen protocol)
-func MakeDecryptShare(ciphertext *ElGamalCipherText, publicShare *Point, secretShare []byte) (*Point, *Proof, error) {
+func MakeDecryptShare(ciphertext *ElGamalCipherText, publicShare *types.Point, secretShare []byte) (*types.Point, *Proof, error) {
 	curve := elliptic.P256()
 
 	shareCtPointX, shareCtPointY := curve.ScalarMult(ciphertext.ct1.X, ciphertext.ct1.Y, secretShare)
-	shareCtPoint := Point{}
+	shareCtPoint := types.Point{}
 	shareCtPoint.X = shareCtPointX
 	shareCtPoint.Y = shareCtPointY
 
-	bPointOther := Point{}
+	bPointOther := types.Point{}
 	bPointOther.X = ciphertext.ct1.X
 	bPointOther.Y = ciphertext.ct1.Y
 	proof, err := ProveDlogEq(secretShare, *publicShare, bPointOther, shareCtPoint, curve)
@@ -42,17 +43,17 @@ func MakeDecryptShare(ciphertext *ElGamalCipherText, publicShare *Point, secretS
 
 }
 
-func RecoverVoteCount(cipherText *ElGamalCipherText, shareCtPointList []Point, participantNum int) (*big.Int, bool) {
+func RecoverVoteCount(cipherText *ElGamalCipherText, shareCtPointList []types.Point, participantNum int) (*big.Int, bool) {
 	curve := elliptic.P256()
 	curveParams := curve.Params()
 	minusOne := new(big.Int).Sub(curveParams.N, big.NewInt(1))
 
-	result := Point{}
+	result := types.Point{}
 	result.X.Set(cipherText.ct2.X)
 	result.Y.Set(cipherText.ct2.Y)
 
 	for _, p := range shareCtPointList {
-		minusP := Point{}
+		minusP := types.Point{}
 		minusP.X, minusP.Y = curve.ScalarMult(p.X, p.Y, minusOne.Bytes())
 
 		result.X, result.Y = curve.Add(result.X, result.Y, minusP.X, minusP.Y)
@@ -63,7 +64,7 @@ func RecoverVoteCount(cipherText *ElGamalCipherText, shareCtPointList []Point, p
 }
 
 // Shank's baby step-giant step algorithm, used for obtaining final vote tallying
-func BsgsFunction(target *Point, curve elliptic.Curve, participantNum int) (*big.Int, bool) {
+func BsgsFunction(target *types.Point, curve elliptic.Curve, participantNum int) (*big.Int, bool) {
 
 	table := make(map[BSGSPoint]int, 0)
 	current := BSGSPoint{}
