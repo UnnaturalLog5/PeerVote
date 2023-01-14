@@ -78,7 +78,7 @@ func (n *node) Vote(electionID string, choiceID string) error {
 		return errors.New("this peer has already voted")
 	}
 
-	if !n.IsElectionStarted(election) {
+	if !election.IsElectionStarted() {
 		// todo display some kind of a message on frontend
 		return errors.New("election hasn't started yet")
 	}
@@ -89,7 +89,7 @@ func (n *node) Vote(electionID string, choiceID string) error {
 	election.MyVote = voteMessage.ChoiceID
 	n.electionStore.Set(voteMessage.ElectionID, election)
 
-	mixnetServer := n.GetFirstQualifiedInitiator(election)
+	mixnetServer := election.GetFirstQualifiedInitiator()
 	err := n.sendVoteMessage(mixnetServer, voteMessage)
 	if err != nil {
 		return err

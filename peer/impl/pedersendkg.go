@@ -38,7 +38,7 @@ func (n *node) PedersenDkg(election *types.Election) {
 		}
 		return *new(big.Int).Mod(&sum, &n.conf.PedersenSuite.Q)
 	}
-	myMixnetServerID := n.GetMyMixnetServerID(election)
+	myMixnetServerID := election.GetMyMixnetServerID(n.myAddr)
 	// Compute the share xij and send it to each mixnetServer
 	for i := 0; i < len(election.Base.MixnetServers); i++ {
 		share := f(i + 1) // IDs of the mixnet server starts from 1
@@ -136,7 +136,7 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 
 	n.dkgMutex.Unlock()
 
-	myMixnetID := big.NewInt(int64(n.GetMyMixnetServerID(election) + 1))
+	myMixnetID := big.NewInt(int64(election.GetMyMixnetServerID(n.myAddr) + 1))
 	isValid := n.VerifyEquation(myMixnetID, &dkgMessage.Share, dkgMessage.X, election.Base.Threshold)
 
 	n.sendDKGShareValidationMessage(dkgMessage.ElectionID, election.Base.MixnetServers, dkgMessage.MixnetServerID, isValid)
@@ -243,7 +243,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 				return nil
 			}
 		} else {
-			myMixnetServerID := n.GetMyMixnetServerID(election)
+			myMixnetServerID := election.GetMyMixnetServerID(n.myAddr)
 			if myMixnetServerID == dkgShareValidationMessage.MixnetServerID {
 				n.dkgMutex.Unlock()
 				n.sendDKGRevealShareMessage(election, myMixnetServerID, dkgShareValidationMessage.MixnetServerID)
@@ -400,7 +400,7 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 	}
 	election.Base.ElectionReadyCnt++
 
-	if n.IsElectionStarted(election) {
+	if election.IsElectionStarted() {
 		// todo election started, I am allowed to cast a vote
 		// todo display some kind of a message on frontend
 		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote", pkt.Header.Source)
@@ -461,7 +461,7 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 	election.Base.Initiators[pkt.Header.Source] = startElectionMessage.PublicKey
 	election.Base.Expiration = startElectionMessage.Expiration
 
-	if n.IsElectionStarted(election) {
+	if election.IsElectionStarted() {
 		// todo election started, I am allowed to cast a vote
 		// todo display some kind of a message on frontend
 		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote!")
@@ -473,7 +473,7 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 
 // ShouldInitiateElection checks whether mixnet node should start the election
 func (n *node) ShouldInitiateElection(election *types.Election) bool {
-	myID := n.GetMyMixnetServerID(election)
+	myID := election.GetMyMixnetServerID(n.myAddr)
 	initiatorID := n.GetMixnetServerInitiatorID(election)
 	return myID == initiatorID
 }
@@ -561,36 +561,4 @@ func (n *node) ReconstructPublicKey(election *types.Election) big.Int {
 		productVal.Mod(productVal, &n.conf.PedersenSuite.P)
 	}
 	return *productVal
-}
-
-// GetMyMixnetServerID returns the ID of the node within mixnet servers
-func (n *node) GetMyMixnetServerID(election *types.Election) int {
-	for i, addr := range election.Base.MixnetServers {
-		if addr == n.myAddr {
-			return i
-		}
-	}
-	return -1
-}
-
-// IsElectionStarted checks if the election started (that is, one of the trusted mixnet
-// servers initiated the election and the peer is allowed to cast a vote)
-func (n *node) IsElectionStarted(election *types.Election) bool {
-	if election.Base.ElectionReadyCnt != len(election.Base.MixnetServers) {
-		return false
-	}
-	initiator := n.GetFirstQualifiedInitiator(election)
-	_, exists := election.Base.Initiators[initiator]
-	return exists
-}
-
-// GetFirstQualifiedInitiator returns the ID of the mixnet server which is responsible for
-// initiating the election
-func (n *node) GetFirstQualifiedInitiator(election *types.Election) string {
-	for i := 0; i < len(election.Base.MixnetServersPoints); i++ {
-		if election.Base.MixnetServersPoints[i] > election.Base.Threshold {
-			return election.Base.MixnetServers[i]
-		}
-	}
-	return ""
 }

@@ -30,6 +30,38 @@ type Election struct {
 	Votes   []string
 }
 
+// GetMyMixnetServerID returns the ID of the node within mixnet servers
+func (election *Election) GetMyMixnetServerID(nodeAddr string) int {
+	for i, addr := range election.Base.MixnetServers {
+		if addr == nodeAddr {
+			return i
+		}
+	}
+	return -1
+}
+
+// IsElectionStarted checks if the election started (that is, one of the trusted mixnet
+// servers initiated the election and the peer is allowed to cast a vote)
+func (election *Election) IsElectionStarted() bool {
+	if election.Base.ElectionReadyCnt != len(election.Base.MixnetServers) {
+		return false
+	}
+	initiator := election.GetFirstQualifiedInitiator()
+	_, exists := election.Base.Initiators[initiator]
+	return exists
+}
+
+// GetFirstQualifiedInitiator returns the ID of the mixnet server which is responsible for
+// initiating the election
+func (election *Election) GetFirstQualifiedInitiator() string {
+	for i := 0; i < len(election.Base.MixnetServersPoints); i++ {
+		if election.Base.MixnetServersPoints[i] > election.Base.Threshold {
+			return election.Base.MixnetServers[i]
+		}
+	}
+	return ""
+}
+
 type Choice struct {
 	ChoiceID string
 	Name     string
