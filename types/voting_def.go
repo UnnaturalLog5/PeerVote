@@ -49,6 +49,7 @@ func (election *Election) IsElectionStarted() bool {
 		return false
 	}
 	initiator := election.GetFirstQualifiedInitiator()
+	println("initiator" + initiator)
 	_, exists := election.Base.Initiators[initiator]
 	return exists
 }
@@ -57,7 +58,7 @@ func (election *Election) IsElectionStarted() bool {
 // initiating the election
 func (election *Election) GetFirstQualifiedInitiator() string {
 	for i := 0; i < len(election.Base.MixnetServersPoints); i++ {
-		if election.Base.MixnetServersPoints[i] > election.Base.Threshold {
+		if election.Base.MixnetServersPoints[i] >= election.Base.Threshold {
 			return election.Base.MixnetServers[i]
 		}
 	}
