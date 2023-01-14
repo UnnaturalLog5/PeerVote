@@ -2,6 +2,7 @@ package impl
 
 import (
 	"crypto/elliptic"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -23,6 +24,29 @@ func inMap(element string, recipients map[string]struct{}) bool {
 		}
 	}
 	return false
+}
+
+// Generates random permutation using the FIsher-Yates shuffling algorithm
+func MakeRandomPermutation(size int) []uint32 {
+	perm := make([]uint32, size)
+	for i := 0; i < size; i++ {
+		perm[i] = uint32(i)
+	}
+
+	for i := size - 1; i > 0; i-- {
+		// rand.
+		jBig, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			return nil
+		}
+
+		j := int(jBig.Int64())
+		if j != i {
+			perm[i], perm[j] = perm[j], perm[i]
+		}
+	}
+
+	return perm
 }
 
 func MakePermutationMatrix(permList []uint32) [][]uint32 {
@@ -97,7 +121,7 @@ func MarshalElGamalList(ctList []ElGamalCipherText, curve elliptic.Curve) [][]by
 	return bytePointList
 }
 
-func MarshalBIntList(intList []*big.Int) ([][]byte, error) {
+func MarshalBIntList(intList []big.Int) ([][]byte, error) {
 	intByteList := make([][]byte, 0)
 	for _, p := range intList {
 		intBytes, err := p.MarshalJSON()

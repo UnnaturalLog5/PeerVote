@@ -19,16 +19,11 @@ import (
 )
 
 const (
-	DLOG_LABEL       = "dlog_LABEL"
-	DLOG_EQ_LABEL    = "dlog_EQ_LABEL"
-	DLOG_OR_LABEL    = "dlog_OR_LABEL"
-	SHUFFLE_LABEL    = "shuffle_LABEL"
-	SHUFFLE_01_LABEL = "shuffle_01_LABEL"
-	SHUFFLE_02_LABEL = "shuffle_02_LABEL"
-	SHUFFLE_03_LABEL = "shuffle_03_LABEL"
-	SHUFFLE_04_LABEL = "shuffle_04_LABEL"
-
-	SCALAR_SIZE = 32
+	DLOG_LABEL    = "dlog_LABEL"
+	DLOG_EQ_LABEL = "dlog_EQ_LABEL"
+	DLOG_OR_LABEL = "dlog_OR_LABEL"
+	SHUFFLE_LABEL = "shuffle_LABEL"
+	SCALAR_SIZE   = 32
 )
 
 type Point struct {
@@ -46,7 +41,7 @@ type Proof struct {
 	pPointOther      []byte //publicPointOther (for equality proof)
 	cPoint           []byte //commitPoint
 	cPointOther      []byte //commitPointOhter (for equality proof)
-	verifierChall    []byte //verifier's public coins issued in the OR proof
+	verifierChall    []byte //verifier's issued public coins
 	proverChall      []byte //prover's derived public coins for the first statement
 	proverChallOther []byte //prover's derived public coins for the second statement
 	result           big.Int
@@ -61,13 +56,13 @@ type ShuffleInstance struct {
 }
 
 type ShuffleWitness struct {
-	PermList       []uint32
-	RandomizerList []*big.Int
+	PermList    []uint32
+	RscalarList []big.Int
 }
 
 type ShuffleProof struct {
 	ProofType          string
-	instance           *ShuffleInstance
+	instance           ShuffleInstance
 	verifierChallList  [][]byte
 	tPoint             []byte
 	vPoint             []byte
@@ -81,9 +76,9 @@ type ShuffleProof struct {
 	vCapPoint          []byte
 	wCapPointListBytes [][]byte
 	wCapPoint          []byte
-	sZeroScalar        *big.Int
+	sZeroScalar        big.Int
 	sList              []*big.Int
-	dScalar            *big.Int
+	dScalar            big.Int
 }
 
 type ElGamalCipherText struct {
@@ -132,10 +127,10 @@ func NewShuffleInstance(curve elliptic.Curve, pPoint Point, ctBefore, ctAfter []
 	}
 }
 
-func NewShuffleWitness(permList []uint32, randomizerList []*big.Int) *ShuffleWitness {
+func NewShuffleWitness(permList []uint32, RscalarList []big.Int) *ShuffleWitness {
 	return &ShuffleWitness{
-		PermList:       permList,
-		RandomizerList: randomizerList,
+		PermList:    permList,
+		RscalarList: RscalarList,
 	}
 }
 
@@ -184,12 +179,13 @@ func ProveDlog(secret Value, pPoint Point, curve elliptic.Curve) (*Proof, error)
 
 	// Derive public coins (challenge bytes) from the verifier based on the current
 	// Trancript state
-	challScalarBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
-	fmt.Printf("In VerifyDlog, challScalarBytes: %v\n", challScalarBytes)
+	challBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
+
+	fmt.Printf("In VerifyDlog, challBytes: %v\n", challBytes)
 
 	// Cast scalars as big.Ints
 	secretScalar := new(big.Int).SetBytes(secret)
-	challScalar := new(big.Int).SetBytes(challScalarBytes)
+	challScalar := new(big.Int).SetBytes(challBytes)
 	commitScalar := new(big.Int).SetBytes(commitScalarBytes)
 
 	// Computes chall*x (as scalars mod N, where N is the order of the base point)
@@ -202,6 +198,7 @@ func ProveDlog(secret Value, pPoint Point, curve elliptic.Curve) (*Proof, error)
 	proof.curve = curve
 	proof.pPoint = pPointCompressed
 	proof.cPoint = cPointCompressed
+	proof.verifierChall = challBytes
 	proof.result = *result
 
 	fmt.Printf("In ProveDlog, pPoint: %v\n", proof.pPoint)
@@ -224,6 +221,9 @@ func VerifyDlog(proof *Proof) (bool, error) {
 
 	// Derives verifier's challenge based on the current transcript state
 	challBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
+
+	checkBytes := checkChallBytes(challBytes, proof.verifierChall)
+
 	fmt.Printf("In VerifyDlog, challBytes: %v\n", challBytes)
 
 	// Create placeholder for the l.h.s and the r.h.s of the final check
@@ -249,7 +249,7 @@ func VerifyDlog(proof *Proof) (bool, error) {
 	point02.X, point02.Y = proof.curve.Add(point02.X, point02.Y, cPoint.X, cPoint.Y)
 
 	// Finally compare if the claimed value (point01) is equal to the actual value (point02)
-	return point01.X.Cmp(point02.X) == 0 && point01.Y.Cmp(point02.Y) == 0, nil
+	return checkBytes && point01.X.Cmp(point02.X) == 0 && point01.Y.Cmp(point02.Y) == 0, nil
 }
 
 // Proves that the two values P = x*G and P' = x*G' have the same DLOG x (a.k.a the Chaum-Pedersen proof)
@@ -314,12 +314,12 @@ func ProveDlogEq(secret Value, pPoint Point, bPointOther Point, pPointOther Poin
 	transcript.AppendMessage(proofTypeBytes, cPointOtherCompressed)
 
 	// Derive a public coin challenge based on the current state of the transcript
-	challScalarBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
+	challBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
 
 	// Cast scalars as big.Ints
 	secretScalar := new(big.Int).SetBytes(secret)
 	commitScalar := new(big.Int).SetBytes(commitScalarBytes)
-	challScalar := new(big.Int).SetBytes(challScalarBytes)
+	challScalar := new(big.Int).SetBytes(challBytes)
 
 	// Computes chall*x (mod N, where N is the order of the base point)
 	blindedScalar := new(big.Int).Mod(new(big.Int).Mul(secretScalar, challScalar), curveParams.N)
@@ -334,6 +334,7 @@ func ProveDlogEq(secret Value, pPoint Point, bPointOther Point, pPointOther Poin
 	proof.pPointOther = pPointOtherCompressed
 	proof.cPoint = cPointCompressed
 	proof.cPointOther = cPointOtherCompressed
+	proof.verifierChall = challBytes
 	proof.result = *result
 
 	return &proof, nil
@@ -357,6 +358,7 @@ func VerifyDlogEq(proof *Proof) (bool, error) {
 
 	// Generate public challege from the current state of the transcript
 	challBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
+	checkBytes := checkChallBytes(challBytes, proof.verifierChall)
 
 	// Begin deriving components for checking if P = x*G
 
@@ -397,7 +399,8 @@ func VerifyDlogEq(proof *Proof) (bool, error) {
 
 	cPointOther := Point{}
 	cPointOther.X, cPointOther.Y = elliptic.UnmarshalCompressed(proof.curve, proof.cPointOther)
-	return cPoint.X.Cmp(resultFirst.X) == 0 && cPoint.Y.Cmp(resultFirst.Y) == 0 &&
+	return checkBytes &&
+		cPoint.X.Cmp(resultFirst.X) == 0 && cPoint.Y.Cmp(resultFirst.Y) == 0 &&
 		cPointOther.X.Cmp(resultSecond.X) == 0 && cPointOther.Y.Cmp(resultSecond.Y) == 0, nil
 
 }
@@ -760,7 +763,7 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 		return nil, xerrors.Errorf("Error in ProveReEncListShuffle: %v\n", err)
 	}
 
-	byteRandList, err := MarshalBIntList(witness.RandomizerList)
+	byteRandList, err := MarshalBIntList(witness.RscalarList)
 	if err != nil {
 		return nil, xerrors.Errorf("Error in ProveReEncListShuffle: %v\n", err)
 	}
@@ -928,12 +931,12 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 		thetaRScalar := new(big.Int).SetUint64(0)
 
 		//Derive r_i as a scalar
-		rScalar := witness.RandomizerList[i]
+		rScalar := witness.RscalarList[i]
 
 		fmt.Printf("In ProveShuffle, for i: %d, rScalar is: %v\n", i, rScalar)
 
 		//Compute  \theta * r_i
-		thetaRScalar = thetaRScalar.Mul(thetaScalar, rScalar)
+		thetaRScalar = thetaRScalar.Mul(thetaScalar, &rScalar)
 		thetaRScalar = thetaRScalar.Mod(thetaRScalar, curveParams.N)
 
 		fmt.Printf("In ProveShuffle, for i: %d, thetaRsalar is: %v\n", i, thetaRScalar)
@@ -1034,11 +1037,11 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 	for i := 0; i < len(witness.PermList); i++ {
 
 		// Choose r_i
-		rScalar := witness.RandomizerList[i]
-		fmt.Printf("In ProveShuffle, loop for ^w_i, index %d, witness.RandomizerList[i] is: %v\n", i, witness.RandomizerList[i])
+		rScalar := witness.RscalarList[i]
+		fmt.Printf("In ProveShuffle, loop for ^w_i, index %d, witness.RscalarList[i] is: %v\n", i, witness.RscalarList[i])
 
 		//Compute \sigma * r_i
-		sigmarScalar := new(big.Int).Mul(sigmaScalar, rScalar)
+		sigmarScalar := new(big.Int).Mul(sigmaScalar, &rScalar)
 		sigmarScalar.Mod(sigmarScalar, curveParams.N)
 		fmt.Printf("In ProveShuffle, loop for ^w_i, index %d, sigmarScalar is: %v\n", i, sigmarScalar)
 
@@ -1149,8 +1152,8 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 		challScalar := new(big.Int).SetBytes(challScalarList[i])
 		fmt.Printf("In ProveShuffle, challScalar is: %v\n", challScalar)
 		//multiplied by r_j
-		fmt.Printf("In ProveShuffle, loop for s_0, witness.RandomizerList[i] is: %v\n", witness.RandomizerList[i])
-		rBeta := challScalar.Mul(challScalar, witness.RandomizerList[i])
+		fmt.Printf("In ProveShuffle, loop for s_0, witness.RscalarList[i] is: %v\n", witness.RscalarList[i])
+		rBeta := challScalar.Mul(challScalar, &witness.RscalarList[i])
 		rBeta = rBeta.Mod(rBeta, curveParams.N)
 
 		fmt.Printf("In ProveShuffle, for sZeroScalar addend is : %v\n", rBeta)
@@ -1215,7 +1218,7 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 
 	shuffleProof := ShuffleProof{
 		ProofType:          SHUFFLE_LABEL,
-		instance:           instance,
+		instance:           *instance,
 		verifierChallList:  challScalarList,
 		tPoint:             tPointCompressed,
 		vPoint:             vPointCompressed,
@@ -1229,9 +1232,9 @@ func ProveShuffle(instance *ShuffleInstance, witness *ShuffleWitness) (*ShuffleP
 		vCapPoint:          vCapPointCompressed,
 		wCapPointListBytes: wCapPointListCompressed,
 		wCapPoint:          wCapPointCompressed,
-		sZeroScalar:        sZeroScalar,
+		sZeroScalar:        *sZeroScalar,
 		sList:              sList,
-		dScalar:            dScalar,
+		dScalar:            *dScalar,
 	}
 	return &shuffleProof, nil
 }
@@ -1284,12 +1287,14 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	transcript.AppendMessage(proofTypeBytes, proof.wCapPoint)
 
 	//Verifier's step: derive public coins based on the
-	challScalarList := make([][]byte, 0)
+	challBytesList := make([][]byte, 0)
 	for i := 0; i < len(proof.instance.ctBefore); i++ {
-		challScalarList = append(challScalarList, transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE))
+		challBytesList = append(challBytesList, transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE))
 	}
 
-	fmt.Printf("In VerifyShuffle, challScalarList is %v\n", challScalarList)
+	fmt.Printf("In VerifyShuffle, challBytesList is %v\n", challBytesList)
+
+	checkBytes := checkChallBytesLists(challBytesList, proof.verifierChallList)
 
 	//Parse all the points for the final verifier's check
 
@@ -1344,7 +1349,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	}
 	fmt.Printf("In VerifyShuffle, betaGprimePoint initial is (%v,%v)\n", betaGprimePoint.X, betaGprimePoint.Y)
 
-	for i, challBytes := range challScalarList {
+	for i, challBytes := range challBytesList {
 		addend := Point{}
 		fmt.Printf("In VerifyShuffle, for index %d, reEncAfterList[i] is (%v,%v)\n", i, reEncAfterList[i].X, reEncAfterList[i].Y)
 		addend.X, addend.Y = curve.ScalarMult(reEncAfterList[i].X, reEncAfterList[i].Y, challBytes)
@@ -1381,7 +1386,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 
 	fmt.Printf("In VerifyShuffle, challMprimePoint initial is (%v,%v)\n", challMprimePoint.X, challMprimePoint.Y)
 
-	for i, challBytes := range challScalarList {
+	for i, challBytes := range challBytesList {
 		addend := Point{}
 		fmt.Printf("In VerifyShuffle, for index %d, ctMsgAfterList is (%v,%v)\n", i, ctMsgAfterList[i].X, ctMsgAfterList[i].Y)
 		addend.X, addend.Y = curve.ScalarMult(ctMsgAfterList[i].X, ctMsgAfterList[i].Y, challBytes)
@@ -1404,7 +1409,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	fmt.Printf("In VerifyShuffle, challMprimePoint initial is (%v,%v)\n", sBetaSqWGPoint.X, sBetaSqWGPoint.Y)
 
 	sqDiff := new(big.Int).SetUint64(0)
-	for i := 0; i < len(challScalarList); i++ {
+	for i := 0; i < len(challBytesList); i++ {
 		//Compute s_i^2
 		siSq := new(big.Int).Set(proof.sList[i])
 
@@ -1414,7 +1419,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 		fmt.Printf("In VerifyShuffle, for index %d, siSq is %v\n", i, siSq)
 
 		//compute chall^2
-		challScalar := new(big.Int).SetBytes(challScalarList[i])
+		challScalar := new(big.Int).SetBytes(challBytesList[i])
 		challSq := challScalar.Mul(challScalar, challScalar)
 		challSq = challSq.Mod(challSq, curveParams.N)
 		challSq = challSq.Neg(challSq)
@@ -1448,7 +1453,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	}
 	fmt.Printf("In VerifyShuffle, betawCapPoint initial is (%v,%v)\n", betawCapPoint.X, betawCapPoint.Y)
 
-	for i, challBytes := range challScalarList {
+	for i, challBytes := range challBytesList {
 		addend := Point{}
 		addend.X, addend.Y = curve.ScalarMult(wCapPointList[i].X, wCapPointList[i].Y, challBytes)
 		fmt.Printf("In VerifyShuffle, addend for betawCapPoint is (%v,%v)\n", addend.X, addend.Y)
@@ -1474,7 +1479,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 
 	fmt.Printf("In VerifyShuffle, challSqUPoint initial is (%v,%v)\n", challSqUPoint.X, challSqUPoint.Y)
 
-	for i, challBytes := range challScalarList {
+	for i, challBytes := range challBytesList {
 		addend := Point{}
 		challScalar := new(big.Int).SetBytes(challBytes)
 		challSqScalar := challScalar.Mod(challScalar.Mul(challScalar, challScalar), curveParams.N)
@@ -1503,7 +1508,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 	fmt.Printf("In VerifyShuffle, value of sZeroVPoint is (%v,%v)\n", sZeroVPoint.X, sZeroVPoint.Y)
 
 	cubeDiff := new(big.Int).SetUint64(0)
-	for i := 0; i < len(challScalarList); i++ {
+	for i := 0; i < len(challBytesList); i++ {
 		//Compute s_i^3
 		siScalar := new(big.Int).Set(proof.sList[i])
 		siCubed := new(big.Int).SetUint64(0)
@@ -1514,7 +1519,7 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 		fmt.Printf("In VerifyShuffle, for index %d, siCubed is %v\n", i, siCubed)
 
 		//compute -chall^3
-		challSc := new(big.Int).SetBytes(challScalarList[i])
+		challSc := new(big.Int).SetBytes(challBytesList[i])
 
 		challCubed := new(big.Int).SetUint64(0)
 		challCubed = challCubed.Mul(challSc, challSc)
@@ -1563,15 +1568,15 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 
 	fmt.Printf("In VerifyShuffle, initial value of rhs is (%v,%v)\n", rhs.X, rhs.Y)
 
-	for i := 0; i < len(challScalarList); i++ {
+	for i := 0; i < len(challBytesList); i++ {
 		challVcapPoint := Point{}
 		challSqTCapPoint := Point{}
 
-		chall := new(big.Int).SetBytes(challScalarList[i])
+		chall := new(big.Int).SetBytes(challBytesList[i])
 
 		fmt.Printf("In VerifyShuffle, for index %d, value of vCapPoint (%v,%v)\n", i, vCapPointList[i].X, vCapPointList[i].Y)
 
-		challVcapPoint.X, challVcapPoint.Y = curve.ScalarMult(vCapPointList[i].X, vCapPointList[i].Y, challScalarList[i])
+		challVcapPoint.X, challVcapPoint.Y = curve.ScalarMult(vCapPointList[i].X, vCapPointList[i].Y, challBytesList[i])
 		fmt.Printf("In VerifyShuffle, for index %d, value of challVcapPoint (%v,%v)\n", i, challVcapPoint.X, challVcapPoint.Y)
 
 		challSq := new(big.Int).SetUint64(0)
@@ -1592,7 +1597,32 @@ func VerifyShuffle(proof *ShuffleProof) bool {
 
 	fmt.Printf("Check02: %v, Check03: %v, Check04: %v, Check05: %v, Check06: %v\n", checkO2, checkO3, check04, check05, check06)
 
-	return checkO2 && checkO3 && check04 && check05 && check06 //check04 && check05 //TODO: Missing checks for 5.22 (check04), 5.24 (check06)
+	return checkBytes && checkO2 && checkO3 && check04 && check05 && check06 //check04 && check05 //TODO: Missing checks for 5.22 (check04), 5.24 (check06)
+}
+
+func checkChallBytes(derived, actual []byte) bool {
+	if len(derived) != len(actual) {
+		return false
+	}
+
+	check := true
+	for i := 0; i < len(derived); i++ {
+		check = check && (derived[i] == actual[i])
+	}
+	return check
+
+}
+
+func checkChallBytesLists(derived, actual [][]byte) bool {
+	if len(derived) != len(actual) {
+		return false
+	}
+
+	check := true
+	for i := 0; i < len(derived); i++ {
+		check = check && checkChallBytes(derived[i], actual[i])
+	}
+	return check
 }
 
 //Helper functions for this class

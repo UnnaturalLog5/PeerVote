@@ -15,64 +15,63 @@ func Test_ZKP_Dlog_True(t *testing.T) {
 	curve := elliptic.P256()
 	secret, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
 
-	fmt.Printf("In Test_ZKP_Dlog_True, secret length: %v\n", len(secret))
-
 	if err != nil {
-
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
 	}
+
+	fmt.Printf("In Test_ZKP_Dlog_True, secret length: %v\n", len(secret))
 
 	pPoint := impl.NewPoint(px, py)
 
 	proof, err := impl.ProveDlog(secret, pPoint, curve)
 	if err != nil {
+		t.Errorf("Unexpected error, ProveDlog failed: %v", err)
 	}
 
 	isTrue, err := impl.VerifyDlog(proof)
 	if err != nil {
-
+		if err != nil {
+			t.Errorf("Unexpected error, VerifyDlog failed: %v", err)
+		}
 	}
 
-	require.Equal(t, isTrue, true)
+	require.Equal(t, true, isTrue)
 }
 
-/*
 func Test_ZKP_Dlog_False(t *testing.T) {
 	curve := elliptic.P256()
 	secret, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
 
-	fmt.Printf("In Test_ZKP_Dlog_False, secret length: %v\n", len(secret))
-
 	if err != nil {
-
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
 	}
 
-	//Point (1,1) is not on the curve
-	px.SetUint64(1)
-	py.SetUint64(1)
+	fmt.Printf("In Test_ZKP_Dlog_False, secret length: %v\n", len(secret))
+
+	//Shift the point on curve by +G, where G is the base point
+	px, py = curve.Add(px, py, curve.Params().Gx, curve.Params().Gy)
 
 	pPoint := impl.NewPoint(px, py)
 
 	proof, err := impl.ProveDlog(secret, pPoint, curve)
 	if err != nil {
-
+		t.Errorf("Unexpected error, Key Generation in test: %v", err)
 	}
 
 	isTrue, err := impl.VerifyDlog(proof)
 	if err != nil {
-
+		t.Errorf("Unexpected error, VerifyDlog failed: %v", err)
 	}
 
-	require.Equal(t, isTrue, true)
+	require.Equal(t, false, isTrue)
 }
-
-*/
 
 func Test_ZKP_DlogEq_True(t *testing.T) {
 	curve := elliptic.P256()
 	secret, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
 
 	if err != nil {
-
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
 	}
 
 	pPoint := impl.NewPoint(px, py)
@@ -80,7 +79,7 @@ func Test_ZKP_DlogEq_True(t *testing.T) {
 	_, bx, by, err := elliptic.GenerateKey(curve, cryptorand.Reader)
 
 	if err != nil {
-
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
 	}
 
 	bPointOther := impl.NewPoint(bx, by)
@@ -91,52 +90,55 @@ func Test_ZKP_DlogEq_True(t *testing.T) {
 
 	proof, err := impl.ProveDlogEq(secret, pPoint, bPointOther, pPointOther, curve)
 	if err != nil {
-
+		t.Errorf("Unexpected error, ProveDlogEq failed: %v", err)
 	}
 
 	isTrue, err := impl.VerifyDlogEq(proof)
 	if err != nil {
-
+		t.Errorf("Unexpected error, VerifyDlogEq failed: %v", err)
 	}
 
-	require.Equal(t, isTrue, true)
+	require.Equal(t, true, isTrue)
 }
-
-/*
 
 func Test_ZKP_DlogEq_False(t *testing.T) {
 	curve := elliptic.P256()
 	secret, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
 
 	if err != nil {
-
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
 	}
 
 	pPoint := impl.NewPoint(px, py)
 
-	_, bx, by, err := elliptic.GenerateKey(curve, cryptorand.Reader)
+	_, fx, fy, err := elliptic.GenerateKey(curve, cryptorand.Reader)
 
 	if err != nil {
-
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
 	}
 
-	bPointOther := impl.NewPoint(bx, by)
+	bPointOther := impl.NewPoint(fx, fy)
 
-	pPointOther := impl.NewPoint(bx, by)
+	pox, poy := curve.ScalarMult(bPointOther.X, bPointOther.Y, secret)
+
+	pox, poy = curve.Add(pox, poy, curve.Params().Gx, curve.Params().Gy)
+
+	pPointOther := impl.NewPoint(pox, poy)
 
 	proof, err := impl.ProveDlogEq(secret, pPoint, bPointOther, pPointOther, curve)
-	if err != nil {
 
+	if err != nil {
+		t.Errorf("Unexpected error, ProveDlogEq failed: %v", err)
 	}
 
 	isTrue, err := impl.VerifyDlogEq(proof)
-	if err != nil {
 
+	if err != nil {
+		t.Errorf("Unexpected error, VerifyDlogEq failed: %v", err)
 	}
 
 	require.Equal(t, isTrue, false)
 }
-*/
 
 func Test_ZKP_DlogSimulator(t *testing.T) {
 	curve := elliptic.P256()
@@ -144,8 +146,7 @@ func Test_ZKP_DlogSimulator(t *testing.T) {
 	_, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
 
 	if err != nil {
-		fmt.Printf("Error in key generation")
-		return
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
 	}
 
 	transcript := impl.NewTranscript(impl.DLOG_OR_LABEL)
@@ -163,19 +164,19 @@ func Test_ZKP_DlogSimulator(t *testing.T) {
 
 	randSeed, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
-		fmt.Printf("Error in randomness generation")
-		return
+		t.Errorf("Unexpected error, Randomness generation failed: %v", err)
 	}
 
 	//Build randomness generator for the commitment value
 	trPRGbuilder := transcript.BuildRng()
-	//trPRGbuilder.RekeyWitnessBytes(label, secret)
 	trPRGbuilder.RekeyWitnessBytes(label, randSeed.Bytes())
 	trPrg, err := trPRGbuilder.Finalize(label)
-	if err != nil {
 
+	if err != nil {
+		t.Errorf("Unexpected error, building TranscriptRNG failed: %v", err)
 	}
-	//TODO: added for making sure the scalar is of order N
+
+	// Making sure the scalar is of order N
 	challBytes := trPrg.GetRandomness(impl.SCALAR_SIZE)
 	challScalar := new(big.Int).SetBytes(challBytes)
 	challScalar = challScalar.Mod(challScalar, curveParams.N)
@@ -196,8 +197,7 @@ func Test_ZKP_DlogOr_True(t *testing.T) {
 	fmt.Printf("In Test_ZKP_Dlog_True, secret length: %v\n", len(secret))
 
 	if err != nil {
-		fmt.Printf("In Test_ZKP_Dlog_True, error in key generation")
-		return
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
 	}
 
 	pPoint := impl.NewPoint(px, py)
@@ -221,20 +221,19 @@ func Test_ZKP_DlogOr_True(t *testing.T) {
 	fmt.Printf("In Test_ZKP_DlogOr_True, pPointOther is: (%v, %v) \n", pPointOther.X, pPointOther.Y)
 
 	proof, err := impl.ProveDlogOr(secret, pPoint, secretOther, pPointOther, secretBit, curve)
+
 	if err != nil {
-		fmt.Printf("In Test_ZKP_Dlog_True, error in ProveDlogOr")
-		return
+		t.Errorf("Unexpected error, ProveDlogOr failed: %v", err)
 	}
 
 	isTrue, err := impl.VerifyDlogOr(proof)
 	if err != nil {
-		fmt.Printf("In Test_ZKP_Dlog_True, error in VerifyDlogOr")
-		return
+		t.Errorf("Unexpected error, VerifyDlogOr failed: %v", err)
 	}
 
 	fmt.Printf("In Test_ZKP_DlogOr_True, verifier returns: %v \n", isTrue)
 
-	require.Equal(t, isTrue, true)
+	require.Equal(t, true, isTrue)
 }
 
 func Test_ZKP_ElGamalReEncryption(t *testing.T) {
@@ -246,20 +245,22 @@ func Test_ZKP_ElGamalReEncryption(t *testing.T) {
 	pPoint.X = px
 	pPoint.Y = py
 
-	fmt.Printf("Test_ZKP_ReEncryption: Generated keypair\n")
 	if err != nil {
-		return
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
 	}
+
+	fmt.Printf("Test_ZKP_ReEncryption: Generated keypair\n")
 
 	fmt.Printf("Test_ZKP_ReEncryption: Check if pPoint is on curve: %v\n", curve.IsOnCurve(pPoint.X, pPoint.Y))
 
 	encScalar, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
-		return
+		t.Errorf("Unexpected error, Randomness generation failed: %v", err)
 	}
+
 	reEncScalar, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
-		return
+		t.Errorf("Unexpected error, Randomness generation failed: %v", err)
 	}
 
 	msg := make([]byte, 32)
@@ -299,11 +300,11 @@ func Test_ZKP_ElGamalReEncryption(t *testing.T) {
 	// fmt.Printf("Test_ZKP_ReEncryption: ctCheck01Point is: (%v,%v)\n", ctCheck01Point.X, ctCheck01Point.Y)
 	// fmt.Printf("Test_ZKP_ReEncryption: ctCheck02Point is: (%v,%v)\n", ctCheck02Point.X, ctCheck02Point.Y)
 
-	require.Equal(t, ctAfterCt01.X.Cmp(ctCheck01Point.X), 0)
-	require.Equal(t, ctAfterCt01.Y.Cmp(ctCheck01Point.Y), 0)
+	require.Equal(t, 0, ctAfterCt01.X.Cmp(ctCheck01Point.X))
+	require.Equal(t, 0, ctAfterCt01.Y.Cmp(ctCheck01Point.Y))
 
-	require.Equal(t, ctAfterCt02.X.Cmp(ctCheck02Point.X), 0)
-	require.Equal(t, ctAfterCt02.Y.Cmp(ctCheck02Point.Y), 0)
+	require.Equal(t, 0, ctAfterCt02.X.Cmp(ctCheck02Point.X))
+	require.Equal(t, 0, ctAfterCt02.Y.Cmp(ctCheck02Point.Y))
 
 }
 
@@ -314,26 +315,31 @@ func Test_ZKP_Shuffle_Simple(t *testing.T) {
 	pPoint := impl.Point{}
 	//var secret []byte
 	_, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
+
+	if err != nil {
+		t.Errorf("Unexpected error, Key generation failed: %v", err)
+	}
+
 	pPoint.X = px
 	pPoint.Y = py
 
-	if err != nil {
-		return
-	}
 	permList := make([]uint32, 1)
 	permList[0] = 0
 
 	encRandomizerList := make([]*big.Int, 1)
-	encRandomizerList[0], err = cryptorand.Int(cryptorand.Reader, curveParams.N)
+	eR0, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
-		return
+		t.Errorf("Unexpected error, Randomness generation failed: %v", err)
 	}
 
-	reEncRandomizerList := make([]*big.Int, 1)
-	reEncRandomizerList[0], err = cryptorand.Int(cryptorand.Reader, curveParams.N)
+	encRandomizerList[0] = eR0
+
+	reEncRandomizerList := make([]big.Int, 1)
+	rEr0, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
-		return
+		t.Errorf("Unexpected error, Randomness generation failed: %v", err)
 	}
+	reEncRandomizerList[0] = *rEr0
 
 	msg0 := new(big.Int).SetInt64(1)
 
@@ -341,7 +347,7 @@ func Test_ZKP_Shuffle_Simple(t *testing.T) {
 	ctListBefore[0] = *impl.ElGamalEncryption(curve, &pPoint, encRandomizerList[0], msg0)
 
 	ctListMed := make([]impl.ElGamalCipherText, 1)
-	ctListMed[0] = *impl.ElGamalReEncryption(curve, &pPoint, reEncRandomizerList[0], &ctListBefore[0])
+	ctListMed[0] = *impl.ElGamalReEncryption(curve, &pPoint, &reEncRandomizerList[0], &ctListBefore[0])
 
 	ctListAfter := make([]impl.ElGamalCipherText, 1)
 	ctListAfter[permList[0]] = ctListMed[0]
@@ -351,7 +357,7 @@ func Test_ZKP_Shuffle_Simple(t *testing.T) {
 
 	shuffleProof, err := impl.ProveShuffle(shuffleInstance, shuffleWitness)
 	if err != nil {
-		return
+		t.Errorf("Unexpected error, ProveShuffle failed: %v", err)
 	}
 
 	isTrue := impl.VerifyShuffle(shuffleProof)
@@ -367,12 +373,12 @@ func Test_ZKP_Shuffle(t *testing.T) {
 	pPoint := impl.Point{}
 	//var secret []byte
 	_, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
+	if err != nil {
+		t.Errorf("Unexpected error, Key generation failed: %v", err)
+	}
+
 	pPoint.X = px
 	pPoint.Y = py
-
-	if err != nil {
-		return
-	}
 
 	/*
 		permList := make([]uint32, 1)
@@ -392,40 +398,49 @@ func Test_ZKP_Shuffle(t *testing.T) {
 
 	*/
 
-	permList := make([]uint32, 3)
-	permList[0] = 2
-	permList[1] = 0
-	permList[2] = 1
+	permList := impl.MakeRandomPermutation(3)
+	// permList := make([]uint32, 3)
+	// permList[0] = 2
+	// permList[1] = 0
+	// permList[2] = 1
 
-	encRandomizerList := make([]*big.Int, 3)
-	encRandomizerList[0], err = cryptorand.Int(cryptorand.Reader, curveParams.N)
+	encRandomizerList := make([]big.Int, 3)
+	eR0, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
 		return
 	}
-	encRandomizerList[1], err = cryptorand.Int(cryptorand.Reader, curveParams.N)
-	if err != nil {
-		return
-	}
+	encRandomizerList[0] = *eR0
 
-	encRandomizerList[2], err = cryptorand.Int(cryptorand.Reader, curveParams.N)
+	eR1, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
 		return
 	}
+	encRandomizerList[1] = *eR1
 
-	reEncRandomizerList := make([]*big.Int, 3)
-	reEncRandomizerList[0], err = cryptorand.Int(cryptorand.Reader, curveParams.N)
+	eR2, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
 		return
 	}
-	reEncRandomizerList[1], err = cryptorand.Int(cryptorand.Reader, curveParams.N)
-	if err != nil {
-		return
-	}
+	encRandomizerList[2] = *eR2
 
-	reEncRandomizerList[2], err = cryptorand.Int(cryptorand.Reader, curveParams.N)
+	reEncRandomizerList := make([]big.Int, 3)
+	rER0, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
 		return
 	}
+	reEncRandomizerList[0] = *rER0
+
+	rER1, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
+	if err != nil {
+		return
+	}
+	reEncRandomizerList[1] = *rER1
+
+	rER2, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
+	if err != nil {
+		return
+	}
+	reEncRandomizerList[2] = *rER2
 
 	msg0 := new(big.Int).SetInt64(1)
 
@@ -433,9 +448,9 @@ func Test_ZKP_Shuffle(t *testing.T) {
 	msg2 := new(big.Int).SetInt64(1)
 
 	ctListBefore := make([]impl.ElGamalCipherText, 3)
-	ctListBefore[0] = *impl.ElGamalEncryption(curve, &pPoint, encRandomizerList[0], msg0)
-	ctListBefore[1] = *impl.ElGamalEncryption(curve, &pPoint, encRandomizerList[1], msg1)
-	ctListBefore[2] = *impl.ElGamalEncryption(curve, &pPoint, encRandomizerList[2], msg2)
+	ctListBefore[0] = *impl.ElGamalEncryption(curve, &pPoint, &encRandomizerList[0], msg0)
+	ctListBefore[1] = *impl.ElGamalEncryption(curve, &pPoint, &encRandomizerList[1], msg1)
+	ctListBefore[2] = *impl.ElGamalEncryption(curve, &pPoint, &encRandomizerList[2], msg2)
 
 	ctListMed := make([]impl.ElGamalCipherText, 3)
 	ctListMed[0] = ctListBefore[permList[0]]
@@ -443,9 +458,9 @@ func Test_ZKP_Shuffle(t *testing.T) {
 	ctListMed[2] = ctListBefore[permList[2]]
 
 	ctListAfter := make([]impl.ElGamalCipherText, 3)
-	ctListAfter[0] = *impl.ElGamalReEncryption(curve, &pPoint, reEncRandomizerList[0], &ctListMed[0])
-	ctListAfter[1] = *impl.ElGamalReEncryption(curve, &pPoint, reEncRandomizerList[1], &ctListMed[1])
-	ctListAfter[2] = *impl.ElGamalReEncryption(curve, &pPoint, reEncRandomizerList[2], &ctListMed[2])
+	ctListAfter[0] = *impl.ElGamalReEncryption(curve, &pPoint, &reEncRandomizerList[0], &ctListMed[0])
+	ctListAfter[1] = *impl.ElGamalReEncryption(curve, &pPoint, &reEncRandomizerList[1], &ctListMed[1])
+	ctListAfter[2] = *impl.ElGamalReEncryption(curve, &pPoint, &reEncRandomizerList[2], &ctListMed[2])
 
 	shuffleInstance := impl.NewShuffleInstance(curve, pPoint, ctListBefore, ctListAfter)
 	shuffleWitness := impl.NewShuffleWitness(permList, reEncRandomizerList)
