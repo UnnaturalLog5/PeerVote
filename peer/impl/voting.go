@@ -2,6 +2,7 @@ package impl
 
 import (
 	"errors"
+	"math/big"
 	"time"
 
 	"github.com/rs/xid"
@@ -9,7 +10,7 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-func (n *node) StartElection(title, description string, choices, mixnetServers []string, electionDuration time.Duration) (string, error) {
+func (n *node) AnnounceElection(title, description string, choices, mixnetServers []string, electionDuration time.Duration) (string, error) {
 	// generate election id
 	electionChoices := []types.Choice{}
 	for _, choice := range choices {
@@ -19,22 +20,38 @@ func (n *node) StartElection(title, description string, choices, mixnetServers [
 		})
 	}
 
-	expirationTime := time.Now().Add(electionDuration)
-
 	electionID := xid.New().String()
-	startElectionMessage := types.StartElectionMessage{
+	mixnetServersPoints := make([]int, len(mixnetServers))
+	threshold := len(mixnetServers)/2 + len(mixnetServers)%2
+	initiators := make(map[string]big.Int)
+
+	announceElectionMessage := types.AnnounceElectionMessage{
 		Base: types.ElectionBase{
-			ElectionID:    electionID,
-			Initiator:     n.myAddr,
-			Title:         title,
-			Description:   description,
-			Choices:       electionChoices,
-			Expiration:    expirationTime,
+			ElectionID:  electionID,
+			Announcer:   n.myAddr,
+			Title:       title,
+			Description: description,
+			Choices:     electionChoices,
+
+			Duration: electionDuration,
+
+			// initiated later (see HandleInitiateElectionMessage)
+			// Expiration:    expirationTime,
 			MixnetServers: mixnetServers,
+
+			// initiated only if needed (see HandleAnnounceElectionMessage)
+			// MixnetServerInfos:   make(make([]types.MixnetServerInfo, len(mixnetServers)),
+
+			// Incremented when mixnet server is among qualified nodes in types.ElectionReadyMessage
+			MixnetServersPoints: mixnetServersPoints,
+
+			Threshold:        threshold,
+			ElectionReadyCnt: 0,
+			Initiators:       initiators,
 		},
 	}
 
-	err := n.sendStartElectionMessage(startElectionMessage)
+	err := n.sendAnnounceElectionMessage(announceElectionMessage)
 	if err != nil {
 		return "", err
 	}
@@ -42,7 +59,7 @@ func (n *node) StartElection(title, description string, choices, mixnetServers [
 	return electionID, nil
 }
 
-func (n *node) GetElections() []types.Election {
+func (n *node) GetElections() []*types.Election {
 	elections := n.electionStore.GetAll()
 
 	return elections
@@ -61,13 +78,18 @@ func (n *node) Vote(electionID string, choiceID string) error {
 		return errors.New("this peer has already voted")
 	}
 
+	if !election.IsElectionStarted() {
+		// todo display some kind of a message on frontend
+		return errors.New("election hasn't started yet")
+	}
+
 	// TODO
 	// rethink this mechanism, this might cause bugs when the vote is stored here
 	// but sendVoteMessage fails without at least locally processing the rumor
 	election.MyVote = voteMessage.ChoiceID
 	n.electionStore.Set(voteMessage.ElectionID, election)
 
-	mixnetServer := election.Base.MixnetServers[0]
+	mixnetServer := election.GetFirstQualifiedInitiator()
 	err := n.sendVoteMessage(mixnetServer, voteMessage)
 	if err != nil {
 		return err

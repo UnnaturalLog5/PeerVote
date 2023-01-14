@@ -35,6 +35,9 @@ type AsyncNotify interface {
 	// notify waiter
 	// optionally send data to waiting goroutine
 	Notify(key string, data ...any) bool
+
+	Wait(key string, timeout time.Duration) (any, bool)
+	RegisterTimer(key string, timeout time.Duration) string
 }
 
 type timerData struct {
@@ -57,7 +60,10 @@ func New() AsyncNotify {
 func (t *timers) WaitSingle(key string, timeout time.Duration) (any, bool) {
 	waitID := t.SetUpMultiple(timeout)
 	t.Register(waitID, key)
+	return t.Wait(key, timeout)
+}
 
+func (t *timers) Wait(key string, timeout time.Duration) (any, bool) {
 	t.Lock()
 	timerData := t.timers[key]
 	t.Unlock()
@@ -157,4 +163,24 @@ func (t *timers) Notify(key string, data ...any) bool {
 	}
 	c <- sendData
 	return true
+}
+
+func (t *timers) RegisterTimer(key string, timeout time.Duration) string {
+	t.Lock()
+	defer t.Unlock()
+	tim, exists := t.timers[key]
+	if exists {
+		return tim.metaSearchKey
+	}
+
+	c := make(chan any)
+	waitID := xid.New().String()
+
+	timerData := &timerData{
+		c:             c,
+		metaSearchKey: waitID,
+		timeout:       timeout,
+	}
+	t.timers[key] = timerData
+	return waitID
 }

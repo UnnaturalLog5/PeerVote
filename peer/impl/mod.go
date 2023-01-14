@@ -52,7 +52,7 @@ func init() {
 }
 
 // NewPeer creates a new peer. You can change the content and location of this
-// function but you MUST NOT change its signature and package location.
+// function, but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
 	// seed once when we start the peer for all following pseudo-random operations
 	rand.Seed(time.Now().UnixNano())
@@ -100,6 +100,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		paxosInstances:      paxosInstances,
 		threshold:           threshold,
 		electionStore:       electionStore,
+
+		dkgMutex: sync.Mutex{},
 	}
 
 	// register Callbacks
@@ -119,10 +121,17 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.PaxosAcceptMessage{}, peer.HandlePaxosAcceptMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.TLCMessage{}, peer.HandleTLCMessage)
 
-	peer.conf.MessageRegistry.RegisterMessageCallback(types.StartElectionMessage{}, peer.HandleStartElectionMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.AnnounceElectionMessage{}, peer.HandleAnnounceElectionMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.VoteMessage{}, peer.HandleVoteMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.MixMessage{}, peer.HandleMixMessage)
 	peer.conf.MessageRegistry.RegisterMessageCallback(types.ResultMessage{}, peer.HandleResultMessage)
+
+	// Pedersen DKG
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.DKGShareMessage{}, peer.HandleDKGShareMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.DKGShareValidationMessage{}, peer.HandleDKGShareValidationMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.ElectionReadyMessage{}, peer.HandleElectionReadyMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.DKGRevealShareMessage{}, peer.HandleDKGRevealShareMessage)
+	peer.conf.MessageRegistry.RegisterMessageCallback(types.StartElectionMessage{}, peer.HandleStartElectionMessage)
 
 	return &peer
 }
@@ -170,5 +179,8 @@ type node struct {
 
 	blockStore storage.Store
 
+	// peervote
 	electionStore electionstore.ElectionStore
+
+	dkgMutex sync.Mutex
 }

@@ -10,38 +10,37 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
-func (n *node) HandleStartElectionMessage(t types.Message, pkt transport.Packet) error {
-	log.Info().Str("peerAddr", n.myAddr).Msgf("handling StartElectionMessage from %v", pkt.Header.Source)
+func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Packet) error {
+	n.dkgMutex.Lock()
 
-	startElectionMessage := types.StartElectionMessage{}
-	err := json.Unmarshal(pkt.Msg.Payload, &startElectionMessage)
+	log.Info().Str("peerAddr", n.myAddr).Msgf("handling AnnounceElectionMessage from %v", pkt.Header.Source)
+
+	announceElectionMessage := types.AnnounceElectionMessage{}
+	err := json.Unmarshal(pkt.Msg.Payload, &announceElectionMessage)
 	if err != nil {
 		return err
 	}
 
 	election := types.Election{
-		Base: startElectionMessage.Base,
+		Base: announceElectionMessage.Base,
 	}
 
 	if n.electionStore.Exists(election.Base.ElectionID) {
 		return errors.New("election already exists")
 	}
 
-	n.electionStore.Set(election.Base.ElectionID, election)
+	n.electionStore.Set(election.Base.ElectionID, &election)
 
-	// if i am the first mixnet server, set timer for expiration to start with mixing
-	if election.Base.MixnetServers[0] == n.myAddr {
-		go func() {
-			// wait until the set expiration date until tallying votes
-			expireIn := election.Base.Expiration.Sub(time.Now())
-			<-time.After(expireIn)
+	n.notfify.Notify(election.Base.ElectionID)
 
-			// mix and forward
-			log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting mixing")
-			// send to ourselves a MixMessage (hop 0) so we can bootstrap the mixing process
-			n.Mix(election.Base.ElectionID, 0)
-		}()
+	n.dkgMutex.Unlock()
+
+	if contains(election.Base.MixnetServers, n.myAddr) {
+		// if node is one of the mixnet servers, it needs to store the data about other mixnet servers
+		election.Base.MixnetServerInfos = make([]*types.MixnetServerInfo, len(election.Base.MixnetServers))
+		n.PedersenDkg(&election)
 	}
+
 	return nil
 }
 

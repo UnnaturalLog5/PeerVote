@@ -2,7 +2,7 @@ package impl
 
 import "go.dedis.ch/cs438/types"
 
-func (n *node) sendStartElectionMessage(electionMessage types.StartElectionMessage) error {
+func (n *node) sendAnnounceElectionMessage(electionMessage types.AnnounceElectionMessage) error {
 	msg, err := marshalMessage(electionMessage)
 	if err != nil {
 		return err
