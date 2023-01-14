@@ -105,7 +105,7 @@ func Test_ElectionTwoMixnetNodes(t *testing.T) {
 	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*5)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 3333)
+	time.Sleep(time.Second * 3)
 
 	elections := node1.GetElections()
 	election := elections[0]
