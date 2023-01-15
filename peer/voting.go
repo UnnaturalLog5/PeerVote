@@ -11,7 +11,7 @@ type Voting interface {
 
 	GetElections() []*types.Election
 
-	Vote(electionID string, choiceID string) error
+	Vote(electionID string, choiceID int) error
 
 	// VerifyProof(...) ...
 }

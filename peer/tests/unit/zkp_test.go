@@ -4,9 +4,10 @@ import (
 	"crypto/elliptic"
 	cryptorand "crypto/rand"
 	"fmt"
-	"go.dedis.ch/cs438/types"
 	"math/big"
 	"testing"
+
+	"go.dedis.ch/cs438/types"
 
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/cs438/peer/impl"
@@ -292,8 +293,8 @@ func Test_ZKP_ElGamalReEncryption(t *testing.T) {
 	ctCheck02Point.X, ctCheck02Point.Y = curve.ScalarMult(pPoint.X, pPoint.Y, checkScalar.Bytes())
 	ctCheck02Point.X, ctCheck02Point.Y = curve.Add(ctCheck02Point.X, ctCheck02Point.Y, msgPoint.X, msgPoint.Y)
 
-	ctAfterCt01 := ctAfter.GetCt1()
-	ctAfterCt02 := ctAfter.GetCt2()
+	ctAfterCt01 := ctAfter.Ct1
+	ctAfterCt02 := ctAfter.Ct2
 
 	// fmt.Printf("Test_ZKP_ReEncryption: ctAfter ct1 is: (%v,%v)\n", ctAfterCt01.X, ctAfterCt01.Y)
 	// fmt.Printf("Test_ZKP_ReEncryption: ctAfter ct2 is: (%v,%v)\n", ctAfterCt02.X, ctAfterCt02.Y)
@@ -344,13 +345,13 @@ func Test_ZKP_Shuffle_Simple(t *testing.T) {
 
 	msg0 := new(big.Int).SetInt64(1)
 
-	ctListBefore := make([]impl.ElGamalCipherText, 1)
+	ctListBefore := make([]types.ElGamalCipherText, 1)
 	ctListBefore[0] = *impl.ElGamalEncryption(curve, &pPoint, encRandomizerList[0], msg0)
 
-	ctListMed := make([]impl.ElGamalCipherText, 1)
+	ctListMed := make([]types.ElGamalCipherText, 1)
 	ctListMed[0] = *impl.ElGamalReEncryption(curve, &pPoint, &reEncRandomizerList[0], &ctListBefore[0])
 
-	ctListAfter := make([]impl.ElGamalCipherText, 1)
+	ctListAfter := make([]types.ElGamalCipherText, 1)
 	ctListAfter[permList[0]] = ctListMed[0]
 
 	shuffleInstance := impl.NewShuffleInstance(curve, pPoint, ctListBefore, ctListAfter)
@@ -448,17 +449,17 @@ func Test_ZKP_Shuffle(t *testing.T) {
 	msg1 := new(big.Int).SetInt64(1)
 	msg2 := new(big.Int).SetInt64(1)
 
-	ctListBefore := make([]impl.ElGamalCipherText, 3)
+	ctListBefore := make([]types.ElGamalCipherText, 3)
 	ctListBefore[0] = *impl.ElGamalEncryption(curve, &pPoint, &encRandomizerList[0], msg0)
 	ctListBefore[1] = *impl.ElGamalEncryption(curve, &pPoint, &encRandomizerList[1], msg1)
 	ctListBefore[2] = *impl.ElGamalEncryption(curve, &pPoint, &encRandomizerList[2], msg2)
 
-	ctListMed := make([]impl.ElGamalCipherText, 3)
+	ctListMed := make([]types.ElGamalCipherText, 3)
 	ctListMed[0] = ctListBefore[permList[0]]
 	ctListMed[1] = ctListBefore[permList[1]]
 	ctListMed[2] = ctListBefore[permList[2]]
 
-	ctListAfter := make([]impl.ElGamalCipherText, 3)
+	ctListAfter := make([]types.ElGamalCipherText, 3)
 	ctListAfter[0] = *impl.ElGamalReEncryption(curve, &pPoint, &reEncRandomizerList[0], &ctListMed[0])
 	ctListAfter[1] = *impl.ElGamalReEncryption(curve, &pPoint, &reEncRandomizerList[1], &ctListMed[1])
 	ctListAfter[2] = *impl.ElGamalReEncryption(curve, &pPoint, &reEncRandomizerList[2], &ctListMed[2])

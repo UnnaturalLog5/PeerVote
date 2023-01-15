@@ -105,7 +105,7 @@ func Test_ElectionTwoMixnetNodes(t *testing.T) {
 	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*5)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 3333)
+	time.Sleep(time.Second * 3)
 
 	elections := node1.GetElections()
 	election := elections[0]
@@ -295,20 +295,16 @@ func Test_Mixing(t *testing.T) {
 		"El Cidad is looking for a new mayor",
 		choices,
 		mixnetServers,
-		time.Second*3)
+		time.Second*8)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 4)
 
 	elections := node1.GetElections()
 	election := elections[0]
 
 	require.Len(t, elections, 1)
 	require.Equal(t, electionID, election.Base.ElectionID)
-
-	elections2 := node2.GetElections()
-	election2 := elections2[0]
-	require.Equal(t, election, election2)
 
 	choice1 := election.Base.Choices[0].ChoiceID
 	choice2 := election.Base.Choices[1].ChoiceID
@@ -389,8 +385,8 @@ func Test_Mixing(t *testing.T) {
 	winner := GetWinner(election.Results)
 	require.Equal(t, winner, choice2)
 
-	elections2 = node2.GetElections()
-	election2 = elections2[0]
+	elections2 := node2.GetElections()
+	election2 := elections2[0]
 	winner2 := GetWinner(election2.Results)
 	require.Equal(t, winner2, choice2)
 

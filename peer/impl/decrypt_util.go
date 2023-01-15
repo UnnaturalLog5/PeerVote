@@ -23,17 +23,17 @@ type BSGSPoint struct {
 
 // Each party generates its' decryption share based on the ciphertext pair, and broadcasts it
 // together with the proof of the correct share generation (Chaum-Pedersen protocol)
-func MakeDecryptShare(ciphertext *ElGamalCipherText, publicShare *types.Point, secretShare []byte) (*types.Point, *Proof, error) {
+func MakeDecryptShare(ciphertext *types.ElGamalCipherText, publicShare *types.Point, secretShare []byte) (*types.Point, *types.Proof, error) {
 	curve := elliptic.P256()
 
-	shareCtPointX, shareCtPointY := curve.ScalarMult(ciphertext.ct1.X, ciphertext.ct1.Y, secretShare)
+	shareCtPointX, shareCtPointY := curve.ScalarMult(ciphertext.Ct1.X, ciphertext.Ct1.Y, secretShare)
 	shareCtPoint := types.Point{}
 	shareCtPoint.X = shareCtPointX
 	shareCtPoint.Y = shareCtPointY
 
 	bPointOther := types.Point{}
-	bPointOther.X = ciphertext.ct1.X
-	bPointOther.Y = ciphertext.ct1.Y
+	bPointOther.X = ciphertext.Ct1.X
+	bPointOther.Y = ciphertext.Ct1.Y
 	proof, err := ProveDlogEq(secretShare, *publicShare, bPointOther, shareCtPoint, curve)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("Error in Decrypt  partial, error in generating proof")
@@ -43,14 +43,14 @@ func MakeDecryptShare(ciphertext *ElGamalCipherText, publicShare *types.Point, s
 
 }
 
-func RecoverVoteCount(cipherText *ElGamalCipherText, shareCtPointList []types.Point, participantNum int) (*big.Int, bool) {
+func RecoverVoteCount(cipherText *types.ElGamalCipherText, shareCtPointList []types.Point, participantNum int) (*big.Int, bool) {
 	curve := elliptic.P256()
 	curveParams := curve.Params()
 	minusOne := new(big.Int).Sub(curveParams.N, big.NewInt(1))
 
 	result := types.Point{}
-	result.X.Set(cipherText.ct2.X)
-	result.Y.Set(cipherText.ct2.Y)
+	result.X.Set(cipherText.Ct2.X)
+	result.Y.Set(cipherText.Ct2.Y)
 
 	for _, p := range shareCtPointList {
 		minusP := types.Point{}

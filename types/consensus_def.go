@@ -98,7 +98,7 @@ func (b *BlockchainBlock) Marshal() ([]byte, error) {
 	return json.Marshal(b)
 }
 
-// Unmarshal unmarshals the data into the current instance. To unmarshal a
+// Unmarshal unmarshals the data into the current Instance. To unmarshal a
 // block:
 //
 //	var block BlockchainBlock

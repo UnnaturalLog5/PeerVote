@@ -36,7 +36,7 @@ func (m VoteMessage) Name() string {
 
 // String implements types.Message.
 func (m VoteMessage) String() string {
-	return fmt.Sprintf("<%s> - Vote: %s", m.ElectionID, m.ChoiceID)
+	return fmt.Sprintf("<%s> - Vote: %s", m.ElectionID, m.EncryptedVote)
 }
 
 // HTML implements types.Message.

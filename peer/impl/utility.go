@@ -110,12 +110,12 @@ func UnmarshalPointList(pointListBytes [][]byte, curve elliptic.Curve) []types.P
 	return pointList
 }
 
-func MarshalElGamalList(ctList []ElGamalCipherText, curve elliptic.Curve) [][]byte {
+func MarshalElGamalList(ctList []types.ElGamalCipherText, curve elliptic.Curve) [][]byte {
 	bytePointList := make([][]byte, 0)
 	for _, ct := range ctList {
-		pBytes := elliptic.MarshalCompressed(curve, ct.ct1.X, ct.ct1.Y)
+		pBytes := elliptic.MarshalCompressed(curve, ct.Ct1.X, ct.Ct1.Y)
 		bytePointList = append(bytePointList, pBytes)
-		pBytesOther := elliptic.MarshalCompressed(curve, ct.ct2.X, ct.ct2.Y)
+		pBytesOther := elliptic.MarshalCompressed(curve, ct.Ct2.X, ct.Ct2.Y)
 		bytePointList = append(bytePointList, pBytesOther)
 	}
 
@@ -146,20 +146,20 @@ func MarshalUIntList(intList []uint32) [][]byte {
 	return intByteList
 }
 
-func MakeReencList(ctList []ElGamalCipherText) []types.Point {
+func MakeReencList(ctList []types.ElGamalCipherText) []types.Point {
 	pointList := make([]types.Point, 0)
 	for i := 0; i < len(ctList); i++ {
 		//fmt.Printf("In ProveShuffle,  is %v\n", ctMsgAfterList)
-		p := NewPoint(ctList[i].ct1.X, ctList[i].ct1.Y)
+		p := NewPoint(ctList[i].Ct1.X, ctList[i].Ct1.Y)
 		pointList = append(pointList, p)
 	}
 	return pointList
 }
 
-func MakeCtMsgList(ctList []ElGamalCipherText) []types.Point {
+func MakeCtMsgList(ctList []types.ElGamalCipherText) []types.Point {
 	pointList := make([]types.Point, 0)
 	for i := 0; i < len(ctList); i++ {
-		p := NewPoint(ctList[i].ct2.X, ctList[i].ct2.Y)
+		p := NewPoint(ctList[i].Ct2.X, ctList[i].Ct2.Y)
 		pointList = append(pointList, p)
 	}
 	return pointList
