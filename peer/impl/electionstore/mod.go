@@ -15,7 +15,7 @@ type ElectionStore interface {
 
 	Set(key string, val *types.Election)
 
-	StoreVote(key string, encryptedChoice types.ElGamalCipherText)
+	StoreVote(key string, encryptedChoice types.VoteMessage)
 
 	Delete(key string)
 
@@ -82,7 +82,7 @@ func (s *store) Set(key string, val *types.Election) {
 	s.data[key] = val
 }
 
-func (s *store) StoreVote(key string, vote types.ElGamalCipherText) {
+func (s *store) StoreVote(key string, vote types.VoteMessage) {
 	s.Lock()
 	defer s.Unlock()
 

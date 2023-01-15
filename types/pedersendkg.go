@@ -41,7 +41,7 @@ func (m DKGShareValidationMessage) Name() string {
 
 // String implements types.Message.
 func (m DKGShareValidationMessage) String() string {
-	return fmt.Sprintf("DKG-share-validation: electionID: %s; mixnetServerID: %s; isValid: %t",
+	return fmt.Sprintf("DKG-share-validation: electionID: %s; mixnetServerID: %d; isValid: %t",
 		m.ElectionID, m.MixnetServerID, m.IsShareValid)
 }
 

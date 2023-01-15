@@ -30,8 +30,8 @@ type Election struct {
 	Base   ElectionBase
 	MyVote int
 	// choiceID -> count
-	Results map[string]uint
-	Votes   []ElGamalCipherText
+	Results map[int]uint
+	Votes   []VoteMessage
 }
 
 type ElGamalCipherText struct {
@@ -104,7 +104,7 @@ type VoteMessage struct {
 
 type MixMessage struct {
 	ElectionID string
-	Votes      []ElGamalCipherText
+	Votes      []VoteMessage
 	NextHop    int
 
 	// Proofs
@@ -114,7 +114,7 @@ type MixMessage struct {
 
 type ResultMessage struct {
 	ElectionID string
-	Results    map[string]uint
+	Results    map[int]uint
 	// Proof
 }
 

@@ -41,9 +41,9 @@ func (v voting) ElectionsHTMLHandler() http.HandlerFunc {
 	}
 }
 
-func GetWinner(results map[string]uint) string {
+func GetWinner(results map[int]uint) int {
 	highestCount := uint(0)
-	winner := ""
+	winner := -1
 
 	for choice, count := range results {
 		if count > highestCount {
@@ -59,15 +59,15 @@ type electionView struct {
 	Base types.ElectionBase
 	// use this over the one in Base, as this one is nicely formatted
 	Expiration     string
-	MyVote         string
-	Winner         string
+	MyVote         int
+	Winner         int
 	Results        []resultView
 	ProofsVerified map[string]bool
 }
 
 type resultView struct {
 	Name     string
-	ChoiceID string
+	ChoiceID int
 	Count    uint
 }
 
@@ -254,7 +254,7 @@ func (v voting) VoteHandler() http.HandlerFunc {
 
 type voteArgument struct {
 	ElectionID string
-	ChoiceID   string
+	ChoiceID   int
 }
 
 func (v voting) votePost(w http.ResponseWriter, r *http.Request) {

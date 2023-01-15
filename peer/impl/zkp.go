@@ -1917,3 +1917,15 @@ func ElGamalReEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big
 		Ct2: ct2,
 	}
 }
+
+func ElGamalVoteReEncryption(curve elliptic.Curve, pPoint *types.Point, rScalar *big.Int, vote types.VoteMessage) types.VoteMessage {
+
+	ct := ElGamalReEncryption(curve, pPoint, rScalar, &vote.EncryptedVote)
+
+	return types.VoteMessage{
+		ElectionID:       vote.ElectionID,
+		EncryptedVote:    *ct,
+		CorrectVoteProof: vote.CorrectVoteProof,
+		CorectEncProof:   vote.CorectEncProof,
+	}
+}

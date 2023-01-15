@@ -264,7 +264,6 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 
 // sendDKGRevealShareMessage broadcasts types.DKGRevealShareMessage to other mixnet servers
 func (n *node) sendDKGRevealShareMessage(election *types.Election, myMixnetServerID int, complainingServerID int) {
-	return
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKGRevealShareMessage")
 
 	recipients := make(map[string]struct{})

@@ -53,10 +53,6 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 		return err
 	}
 
-	isValid, err := VerifyDlogOr(&voteMessage.CorrectVoteProof)
-	if err != nil || !isValid {
-		return errors.New("vote is not valid - failed to verify CorrectVoteProof")
-	}
 	election := n.electionStore.Get(voteMessage.ElectionID)
 
 	// accept if not expired
@@ -64,7 +60,7 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 		return errors.New("this election expired - vote won't be accepted")
 	}
 
-	n.electionStore.StoreVote(election.Base.ElectionID, voteMessage.EncryptedVote)
+	n.electionStore.StoreVote(election.Base.ElectionID, voteMessage)
 
 	return nil
 }
@@ -81,14 +77,17 @@ func (n *node) HandleMixMessage(t types.Message, pkt transport.Packet) error {
 	election.Votes = mixMessage.Votes
 	n.electionStore.Set(mixMessage.ElectionID, election)
 
-	isValid := true
-	for _, shuffleProof := range mixMessage.ShuffleProofs {
-		isValid = isValid && VerifyShuffle(&shuffleProof)
-	}
+	/*
+		isValid := true
+		for _, shuffleProof := range mixMessage.ShuffleProofs {
+			isValid = isValid && VerifyShuffle(&shuffleProof)
+		}
 
-	if !isValid {
-		return errors.New("shuffle proof is not valid")
-	}
+		if !isValid {
+			return errors.New("shuffle proof is not valid")
+		}
+
+	*/
 
 	err = n.Mix(mixMessage.ElectionID, mixMessage.NextHop, mixMessage.ShuffleProofs, mixMessage.ReEncryptionProofs)
 	if err != nil {

@@ -59,7 +59,7 @@ func (m ResultMessage) Name() string {
 // String implements types.Message.
 func (m ResultMessage) String() string {
 	highestCount := uint(0)
-	winner := ""
+	winner := -1
 
 	for choice, count := range m.Results {
 		if count > highestCount {
@@ -68,7 +68,7 @@ func (m ResultMessage) String() string {
 		}
 	}
 
-	return fmt.Sprintf("<%s> - Winner: %s", m.ElectionID, winner)
+	return fmt.Sprintf("<%s> - Winner: %d", m.ElectionID, winner)
 }
 
 // HTML implements types.Message.
