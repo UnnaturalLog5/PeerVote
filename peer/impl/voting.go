@@ -18,9 +18,9 @@ const (
 func (n *node) AnnounceElection(title, description string, choices, mixnetServers []string, electionDuration time.Duration) (string, error) {
 	// generate election id
 	electionChoices := []types.Choice{}
-	for _, choice := range choices {
+	for i, choice := range choices {
 		electionChoices = append(electionChoices, types.Choice{
-			ChoiceID: xid.New().String(),
+			ChoiceID: i,
 			Name:     choice,
 		})
 	}
@@ -70,7 +70,7 @@ func (n *node) GetElections() []*types.Election {
 	return elections
 }
 
-// todo vote async notify
+// todo vasilije vote async notify
 func (n *node) Vote(electionID string, choiceID int) error {
 
 	election := n.electionStore.Get(electionID)
@@ -106,7 +106,6 @@ func (n *node) Vote(electionID string, choiceID int) error {
 	n.dkgMutex.Lock()
 	if !election.IsElectionStarted() {
 		n.dkgMutex.Unlock()
-		// todo display some kind of a message on frontend
 		return errors.New("election hasn't started yet")
 	}
 
@@ -142,8 +141,13 @@ func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProo
 
 	rScalars := GenerateRandomPolynomial(len(votes)-1, elliptic.P256().Params().N)
 
+	//todo dejan decryptShares := make([]types.ElGamalCipherText, voteCnt)
 	for i, permutedVote := range permutedVotes {
 		reencryptedVote := ElGamalReEncryption(elliptic.P256(), &publicKey, &rScalars[i], &permutedVote)
+
+		// todo decryptShare := MakeDecryptShare(reencryptedVote, publicKey,)
+		// decryptShares = append(decryptShares, )
+
 		reencryptedVotes = append(reencryptedVotes, *reencryptedVote)
 	}
 
@@ -197,14 +201,15 @@ func (n *node) Tally(electionID string, votes []types.ElGamalCipherText) {
 
 	// we want 0 to show up as a count as well
 	// inefficient, but doesn't matter
-	results := map[string]uint{}
+	results := map[int]uint{}
 	for _, choice := range election.Base.Choices {
 		count := uint(0)
-		for _, vote := range votes {
-			if vote == choice.ChoiceID {
-				count++
-			}
-		}
+		//for _, vote := range votes {
+		// todo vasilije uncomment dis
+		//if vote == choice.ChoiceID {
+		count++
+		//}
+		//}
 
 		results[choice.ChoiceID] = count
 	}

@@ -411,8 +411,9 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 	election.Base.ElectionReadyCnt++
 
 	if election.IsElectionStarted() {
-		// todo election started, I am allowed to cast a vote
+		// todo marc & vasilije election started, I am allowed to cast a vote
 		// todo display some kind of a message on frontend
+
 		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote", pkt.Header.Source)
 	}
 	n.dkgMutex.Unlock()

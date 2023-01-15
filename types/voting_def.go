@@ -87,7 +87,7 @@ func (election *Election) GetNextMixHop(hop int) int {
 }
 
 type Choice struct {
-	ChoiceID string
+	ChoiceID int
 	Name     string
 }
 
