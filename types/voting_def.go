@@ -30,7 +30,7 @@ type Election struct {
 	Base   ElectionBase
 	MyVote int
 	// choiceID -> count
-	Results map[string]uint
+	Results map[int]uint
 	Votes   []ElGamalCipherText
 }
 

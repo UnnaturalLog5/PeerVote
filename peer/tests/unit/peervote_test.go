@@ -10,9 +10,9 @@ import (
 	"go.dedis.ch/cs438/transport/channel"
 )
 
-func GetWinner(results map[string]uint) string {
+func GetWinner(results map[int]uint) int {
 	highestCount := uint(0)
-	winner := ""
+	winner := -1
 
 	for choice, count := range results {
 		if count > highestCount {
