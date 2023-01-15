@@ -63,6 +63,7 @@ type electionView struct {
 	Winner         int
 	Results        []resultView
 	ProofsVerified map[string]bool
+	IsReady        bool
 }
 
 type resultView struct {
@@ -87,6 +88,8 @@ func (v voting) electionsHTMLGet(w http.ResponseWriter, r *http.Request) {
 			Expiration: election.Base.Expiration.Format(time.ANSIC),
 			MyVote:     election.MyVote,
 		}
+
+		electionV.IsReady = election.IsElectionStarted()
 
 		electionV.Winner = GetWinner(election.Results)
 

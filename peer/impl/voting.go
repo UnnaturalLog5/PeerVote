@@ -74,7 +74,6 @@ func (n *node) GetElections() []*types.Election {
 
 // todo vasilije vote async notify
 func (n *node) Vote(electionID string, choiceID int) error {
-
 	election := n.electionStore.Get(electionID)
 
 	// encrypt choiceID

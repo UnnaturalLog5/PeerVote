@@ -656,7 +656,7 @@ class Packets extends BaseElement {
 
     const type = pkt.Msg.Type;
 
-    if (type == "startelection" || type == "result") {
+    if (type == "startelection" || type == "result" || type == "election-ready") {
       this.electionsOutlet.update();
     }
 
