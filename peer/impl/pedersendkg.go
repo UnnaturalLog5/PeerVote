@@ -263,7 +263,6 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 
 // sendDKGRevealShareMessage broadcasts types.DKGRevealShareMessage to other mixnet servers
 func (n *node) sendDKGRevealShareMessage(election *types.Election, myMixnetServerID int, complainingServerID int) {
-	return
 	log.Info().Str("peerAddr", n.myAddr).Msgf("sending DKGRevealShareMessage")
 
 	recipients := make(map[string]struct{})
@@ -312,30 +311,45 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling DKGRevealShareMessage from %v", pkt.Header.Source)
 
 	election := n.electionStore.Get(dkgRevealShareMessage.ElectionID)
-	// todo what if node hasn't received ElectionAnnounceMessage yet?
-	// add some kind of synchronization
 
+	n.dkgMutex.Lock()
 	mixnetServers := election.Base.MixnetServers
 
 	if !contains(mixnetServers, n.myAddr) {
+		n.dkgMutex.Unlock()
 		return fmt.Errorf("node received DKGShareValidationMessage for electionID %s,"+
 			" but the node is not one of the mixnetServers", dkgRevealShareMessage.ElectionID)
 	}
 
-	if election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus == types.NOT_DECIDED_YET {
+	mixnetServerInfo := election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID]
+	if mixnetServerInfo == nil {
+		mixnetServerInfo = &types.MixnetServerInfo{
+			ReceivedShare:   big.Int{},
+			X:               make([]types.Point, len(election.Base.MixnetServers)),
+			VerifiedCnt:     0,
+			ComplainedCnt:   0,
+			QualifiedStatus: types.NOT_DECIDED_YET,
+		}
+		election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID] = mixnetServerInfo
+	}
 
+	if election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus == types.NOT_DECIDED_YET {
 		j := big.NewInt(int64(dkgRevealShareMessage.MixnetServerID))
 		share := dkgRevealShareMessage.Share
 		X := election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X
 		isValid := n.VerifyEquation(j, &share, X, election.Base.Threshold)
 
 		if !isValid {
+
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].X,
 				election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].Y =
 				elliptic.P256().ScalarBaseMult(make([]byte, 32))
 			if n.ShouldSendElectionReadyMessage(election) {
+				println("jej")
+				n.dkgMutex.Unlock()
 				n.sendElectionReadyMessage(election)
+				return nil
 			}
 		} else {
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].VerifiedCnt++
@@ -343,12 +357,15 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 			if election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].VerifiedCnt == len(election.Base.MixnetServers) {
 				election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.QUALIFIED
 				if n.ShouldSendElectionReadyMessage(election) {
+					n.dkgMutex.Unlock()
 					n.sendElectionReadyMessage(election)
+					return nil
 				}
 			}
 		}
 	}
 
+	n.dkgMutex.Unlock()
 	return nil
 }
 

@@ -1,6 +1,10 @@
 package unit
 
 import (
+	"crypto/elliptic"
+	"crypto/rand"
+	"go.dedis.ch/cs438/types"
+	"math/big"
 	"testing"
 	"time"
 
@@ -414,6 +418,178 @@ func Test_Mixing(t *testing.T) {
 	require.Equal(t, winner3, choice2)
 }
 
+func Test_DishonestMixnetNode(t *testing.T) {
+	transp := channel.NewTransport()
+
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+	defer node1.Stop()
+
+	dishonestNode, err := transp.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+
+	// add peers
+	node1.AddPeer(node1.GetAddr())
+	node1.AddPeer(dishonestNode.GetAddress())
+
+	choices := []string{"One choice", "a better choice"}
+
+	mixnetServers := []string{node1.GetAddr(), dishonestNode.GetAddress()}
+
+	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*5)
+	require.NoError(t, err)
+
+	// > the socket must receive a AnnounceElectionMessage
+	packet, err := dishonestNode.Recv(time.Second)
+	require.NoError(t, err)
+
+	// send invalid types.DKGShareMessage
+
+	dkgMessage := CreateInvalidDKGShareMessage(electionID, 1, 1)
+	transpMsg, err := node1.GetRegistry().MarshalMessage(&dkgMessage)
+	require.NoError(t, err)
+
+	header := transport.NewHeader(dishonestNode.GetAddress(), dishonestNode.GetAddress(), node1.GetAddr(), 0)
+
+	packet = transport.Packet{
+		Header: &header,
+		Msg:    &transpMsg,
+	}
+
+	err = dishonestNode.Send(node1.GetAddr(), packet, 0)
+	require.NoError(t, err)
+
+	// > the socket must receive a DKGShareMessages from node1
+	packet, err = dishonestNode.Recv(time.Second)
+	require.NoError(t, err)
+
+	// > the socket must receive a 2 DKGShareValidationMessages from node1
+	packet, err = dishonestNode.Recv(time.Second)
+	require.NoError(t, err)
+	packet, err = dishonestNode.Recv(time.Second)
+	require.NoError(t, err)
+
+	// Send 2 DKGShareValidation messages
+	for i := 0; i <= 1; i++ {
+		dkgShareValidationMessage := CreateDKGShareValidationMessage(electionID, i)
+		transpMsg, err = node1.GetRegistry().MarshalMessage(&dkgShareValidationMessage)
+		require.NoError(t, err)
+		header = transport.NewHeader(dishonestNode.GetAddress(), dishonestNode.GetAddress(), node1.GetAddr(), 0)
+		packet = transport.Packet{
+			Header: &header,
+			Msg:    &transpMsg,
+		}
+		err = dishonestNode.Send(node1.GetAddr(), packet, 0)
+		require.NoError(t, err)
+	}
+
+	// Send DKGShareReveal Message
+	time.Sleep(time.Second)
+	dkgRevealShareMessage := CreateDKGShareRevealMessage(electionID, 1, 0)
+	transpMsg, err = node1.GetRegistry().MarshalMessage(&dkgRevealShareMessage)
+	require.NoError(t, err)
+	header = transport.NewHeader(dishonestNode.GetAddress(), dishonestNode.GetAddress(), node1.GetAddr(), 0)
+	packet = transport.Packet{
+		Header: &header,
+		Msg:    &transpMsg,
+	}
+	err = dishonestNode.Send(node1.GetAddr(), packet, 0)
+	require.NoError(t, err)
+
+	// Send ElectionReady Message
+	qualifiedServers := make([]int, 2)
+	qualifiedServers = append(qualifiedServers, 0)
+	qualifiedServers = append(qualifiedServers, 1)
+
+	time.Sleep(1 * time.Second)
+	electionReadyMessage := CreateElectionReadyMessage(electionID, qualifiedServers)
+	transpMsg, err = node1.GetRegistry().MarshalMessage(&electionReadyMessage)
+	require.NoError(t, err)
+	header = transport.NewHeader(dishonestNode.GetAddress(), dishonestNode.GetAddress(), node1.GetAddr(), 0)
+	packet = transport.Packet{
+		Header: &header,
+		Msg:    &transpMsg,
+	}
+	err = dishonestNode.Send(node1.GetAddr(), packet, 0)
+	require.NoError(t, err)
+
+	// > the socket must receive an ElectionReady and StartElection from node1
+	packet, err = dishonestNode.Recv(time.Second)
+	require.NoError(t, err)
+	packet, err = dishonestNode.Recv(time.Second)
+	require.NoError(t, err)
+
+	// todo check packet content
+	//
+	//
+	//rumor := z.GetRumor(t, packet.Msg)
+	//require.Len(t, rumor.Rumors, 1)
+	//
+	//
+	//time.Sleep(time.Second * 2)
+	//
+	//require.Len(t, elections, 1)
+	//require.Equal(t, electionID, election.Base.ElectionID)
+	//
+	////
+	//choiceID := election.Base.Choices[0].ChoiceID
+	//err = node1.Vote(elections[0].Base.ElectionID, choiceID)
+	//require.NoError(t, err)
+	//
+	//// first mixnet node accepts the votes
+	//votes := node1.GetElections()[0].Votes
+	//require.Len(t, votes, 3)
+	//
+	//time.Sleep(time.Second * 5)
+	//
+	//elections = node1.GetElections()
+	//election = elections[0]
+	//
+	//winner := GetWinner(election.Results)
+	//require.Equal(t, winner, choiceID)
+	//
+	//winner2 := GetWinner(election.Results)
+	//require.Equal(t, winner2, choiceID)
+}
+
+func CreateElectionReadyMessage(electionID string, qualifiedServers []int) types.ElectionReadyMessage {
+	return types.ElectionReadyMessage{
+		ElectionID:       electionID,
+		QualifiedServers: qualifiedServers,
+	}
+}
+
+func CreateDKGShareRevealMessage(electionID string, mixnetServerID int, complainingServerID int) types.DKGRevealShareMessage {
+	return types.DKGRevealShareMessage{
+		ElectionID:          electionID,
+		Share:               *big.NewInt(1),
+		MixnetServerID:      mixnetServerID,
+		ComplainingServerID: complainingServerID,
+	}
+}
+
+func CreateDKGShareValidationMessage(electionID string, mixnetServerID int) types.DKGShareValidationMessage {
+	return types.DKGShareValidationMessage{
+		ElectionID:     electionID,
+		MixnetServerID: mixnetServerID,
+		IsShareValid:   true,
+	}
+}
+
+func CreateInvalidDKGShareMessage(electionID string, threshold int, mixnetServerID int) types.DKGShareMessage {
+	X := make([]types.Point, threshold+1)
+	tmp := make([]byte, 32)
+	for i := 0; i < threshold+1; i++ {
+		X[i].X, X[i].Y = elliptic.P256().ScalarBaseMult(tmp)
+	}
+
+	return types.DKGShareMessage{
+		ElectionID:     electionID,
+		MixnetServerID: mixnetServerID,
+		Share:          *big.NewInt(1),
+		X:              X,
+	}
+}
+
 // func Test_StartNode(t *testing.T) {
 // 	transp := udp.NewUDP()
 
@@ -441,4 +617,11 @@ func getRumorByOrigin(t *testing.T, pkts []transport.Packet, initiator string, s
 		}
 	}
 	return nil, nil
+}
+
+// GenerateRandomBigInt generates a random value in Zq
+func GenerateRandomBigInt() big.Int {
+	//Generate cryptographically strong pseudo-random between 0 - max
+	a, _ := rand.Int(rand.Reader, elliptic.P256().Params().N)
+	return *a
 }
