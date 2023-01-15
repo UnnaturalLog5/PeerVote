@@ -77,18 +77,19 @@ func (n *node) Vote(electionID string, choiceID string) error {
 		return errors.New("this peer has already voted")
 	}
 
-	if !election.IsElectionStarted() {
-		// todo display some kind of a message on frontend
-		return errors.New("election hasn't started yet")
-	}
+	// wait for the election to start
+	election.VoteWG.Wait()
 
-	// TODO
-	// rethink this mechanism, this might cause bugs when the vote is stored here
-	// but sendVoteMessage fails without at least locally processing the rumor
-	election.MyVote = voteMessage.ChoiceID
-	n.electionStore.Set(voteMessage.ElectionID, election)
+	n.dkgMutex.Lock()
+	//if !election.IsElectionStarted() {
+	//	n.dkgMutex.Unlock()
+	//	return errors.New("election hasn't started yet")
+	//}
 
+	election.MyVote = choiceID
 	mixnetServer := election.GetFirstQualifiedInitiator()
+	n.dkgMutex.Unlock()
+
 	err := n.sendVoteMessage(mixnetServer, voteMessage)
 	if err != nil {
 		return err

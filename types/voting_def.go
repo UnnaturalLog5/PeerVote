@@ -2,6 +2,7 @@ package types
 
 import (
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -30,6 +31,7 @@ type Election struct {
 	// choiceID -> count
 	Results map[string]uint
 	Votes   []string
+	VoteWG  sync.WaitGroup
 }
 
 // GetMyMixnetServerID returns the ID of the node within mixnet servers

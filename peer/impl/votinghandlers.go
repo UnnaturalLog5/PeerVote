@@ -3,6 +3,7 @@ package impl
 import (
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -21,8 +22,11 @@ func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Pack
 		return err
 	}
 
+	voteWG := sync.WaitGroup{}
+	voteWG.Add(1)
 	election := types.Election{
-		Base: announceElectionMessage.Base,
+		Base:   announceElectionMessage.Base,
+		VoteWG: voteWG,
 	}
 
 	if n.electionStore.Exists(election.Base.ElectionID) {

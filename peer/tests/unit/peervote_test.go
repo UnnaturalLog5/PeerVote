@@ -39,10 +39,10 @@ func Test_SimpleElection(t *testing.T) {
 
 	mixnetServers := []string{node2.GetAddr()}
 
-	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*10)
+	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*5)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 6)
+	time.Sleep(time.Second)
 
 	elections := node1.GetElections()
 	election := elections[0]
@@ -105,7 +105,7 @@ func Test_ElectionTwoMixnetNodes(t *testing.T) {
 	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*5)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second)
 
 	elections := node1.GetElections()
 	election := elections[0]
@@ -168,7 +168,7 @@ func Test_ElectionThreeMixnetNodes(t *testing.T) {
 	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*5)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second)
 
 	elections := node1.GetElections()
 	election := elections[0]
