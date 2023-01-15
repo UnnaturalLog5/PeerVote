@@ -4,11 +4,12 @@ import (
 	"crypto/elliptic"
 	"errors"
 	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
-	"math/big"
-	"time"
 )
 
 // PedersenDkg implements Pedersen’s Distributed Key Generation Protocol
@@ -21,7 +22,8 @@ import (
 func (n *node) PedersenDkg(election *types.Election) {
 	// Choose a random polynomial f(z) over Zq of degree t:
 	// f(z) = a0 + a1*z + ... + at*z^t
-	a := GenerateRandomPolynomial(election.Base.Threshold, elliptic.P256().Params().Params().N)
+	a := GenerateRandomPolynomial(election.Base.Threshold, elliptic.P256().Params().N)
+
 	X := make([]types.Point, election.Base.Threshold+1)
 	for i := 0; i < len(a); i++ {
 		// X[i] = g^a[i]
