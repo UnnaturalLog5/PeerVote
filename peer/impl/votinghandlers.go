@@ -96,13 +96,10 @@ func (n *node) HandleResultMessage(t types.Message, pkt transport.Packet) error 
 	}
 
 	// update election record
-	// TODO
-	// when updating winner, the mutex is unlocked
-	// should be unproblematic in this step
-	// but it _might_ cause some nasty bugs
 	election := n.electionStore.Get(resultMessage.ElectionID)
-	election.Results = resultMessage.Results
-	n.electionStore.Set(election.Base.ElectionID, election)
 
+	n.dkgMutex.Lock()
+	election.Results = resultMessage.Results
+	n.dkgMutex.Unlock()
 	return nil
 }

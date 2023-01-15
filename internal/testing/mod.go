@@ -650,6 +650,42 @@ func GetVote(t *testing.T, msg *transport.Message) types.VoteMessage {
 	return voteMessage
 }
 
+// GetDKGShare returns the PaxosPromise associated to the transport.Message.
+func GetDKGShare(t *testing.T, msg *transport.Message) types.DKGShareMessage {
+	require.Equal(t, "dkg-share", msg.Type)
+
+	var dkgShareMessage types.DKGShareMessage
+
+	err := json.Unmarshal(msg.Payload, &dkgShareMessage)
+	require.NoError(t, err)
+
+	return dkgShareMessage
+}
+
+// GetDKGShareValidation returns the PaxosPromise associated to the transport.Message.
+func GetDKGShareValidation(t *testing.T, msg *transport.Message) types.DKGShareValidationMessage {
+	require.Equal(t, "dkg-share-validation", msg.Type)
+
+	var dkgShareMessage types.DKGShareValidationMessage
+
+	err := json.Unmarshal(msg.Payload, &dkgShareMessage)
+	require.NoError(t, err)
+
+	return dkgShareMessage
+}
+
+// GetElectionReady returns the PaxosPromise associated to the transport.Message.
+func GetElectionReady(t *testing.T, msg *transport.Message) types.ElectionReadyMessage {
+	require.Equal(t, "election-ready", msg.Type)
+
+	var m types.ElectionReadyMessage
+
+	err := json.Unmarshal(msg.Payload, &m)
+	require.NoError(t, err)
+
+	return m
+}
+
 // GetMix returns the PaxosPromise associated to the transport.Message.
 func GetMix(t *testing.T, msg *transport.Message) types.MixMessage {
 	require.Equal(t, "mix", msg.Type)

@@ -52,6 +52,7 @@ func (election *Election) IsElectionStarted() bool {
 	}
 	initiator := election.GetFirstQualifiedInitiator()
 	_, exists := election.Base.Initiators[initiator]
+
 	return exists
 }
 

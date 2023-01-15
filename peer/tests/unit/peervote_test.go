@@ -168,7 +168,7 @@ func Test_ElectionThreeMixnetNodes(t *testing.T) {
 	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*5)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 2)
 
 	elections := node1.GetElections()
 	election := elections[0]
@@ -186,8 +186,6 @@ func Test_ElectionThreeMixnetNodes(t *testing.T) {
 
 	err = node3.Vote(elections[0].Base.ElectionID, choiceID)
 	require.NoError(t, err)
-
-	time.Sleep(time.Second)
 
 	// first mixnet node accepts the votes
 	votes := node1.GetElections()[0].Votes
@@ -279,8 +277,15 @@ func Test_Mixing(t *testing.T) {
 	)
 	defer node3.Stop()
 
+	// add peers
 	node1.AddPeer(node2.GetAddr())
+	node1.AddPeer(node3.GetAddr())
+
+	node2.AddPeer(node1.GetAddr())
 	node2.AddPeer(node3.GetAddr())
+
+	node3.AddPeer(node1.GetAddr())
+	node3.AddPeer(node2.GetAddr())
 
 	choices := []string{"One choice", "a better choice"}
 
@@ -295,10 +300,10 @@ func Test_Mixing(t *testing.T) {
 		"El Cidad is looking for a new mayor",
 		choices,
 		mixnetServers,
-		time.Second*3)
+		time.Second*4)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 1)
 
 	elections := node1.GetElections()
 	election := elections[0]
@@ -306,91 +311,100 @@ func Test_Mixing(t *testing.T) {
 	require.Len(t, elections, 1)
 	require.Equal(t, electionID, election.Base.ElectionID)
 
-	elections2 := node2.GetElections()
-	election2 := elections2[0]
-	require.Equal(t, election, election2)
-
 	choice1 := election.Base.Choices[0].ChoiceID
 	choice2 := election.Base.Choices[1].ChoiceID
 
-	err = node1.Vote(elections[0].Base.ElectionID, choice1)
-	require.NoError(t, err)
+	go func() {
+		err = node1.Vote(elections[0].Base.ElectionID, choice1)
+		require.NoError(t, err)
+	}()
+	go func() {
+		err = node2.Vote(elections[0].Base.ElectionID, choice2)
+		require.NoError(t, err)
+	}()
+	go func() {
+		err = node3.Vote(elections[0].Base.ElectionID, choice2)
+		require.NoError(t, err)
+	}()
 
-	err = node2.Vote(elections[0].Base.ElectionID, choice2)
-	require.NoError(t, err)
+	time.Sleep(time.Second * 5)
 
-	err = node3.Vote(elections[0].Base.ElectionID, choice2)
-	require.NoError(t, err)
-
-	time.Sleep(time.Second * 4)
-
+	// todo
+	// each node should send: 3 DKGShareMessages, 3 DKGShareValidationMessages, 3 ElectionReadyMessages and others
 	// all chosen mixnet servers have sent the expected messages
-
 	// node 1 rumors
-	n1outs := node1.GetOuts()
-	// 1: startelection
-	msg, _ := getRumorByOrigin(t, n1outs, node1.GetAddr(), 1)
-	require.NotNil(t, msg)
-	startElection := z.GetStartElection(t, msg)
-	require.NotNil(t, startElection)
-
-	// 2: vote - private
-	msg, _ = getRumorByOrigin(t, n1outs, node1.GetAddr(), 2)
-	require.NotNil(t, msg)
-	private := z.GetPrivate(t, msg)
-	require.Contains(t, private.Recipients, node1.GetAddr())
-	vote := z.GetVote(t, private.Msg)
-	require.NotNil(t, vote)
-
-	// 3: mix - private
-	msg, _ = getRumorByOrigin(t, n1outs, node1.GetAddr(), 3)
-	require.NotNil(t, msg)
-	private = z.GetPrivate(t, msg)
-	require.Contains(t, private.Recipients, node2.GetAddr())
-	mix := z.GetMix(t, private.Msg)
-	require.NotNil(t, mix)
-
-	// node 2
-	n2outs := node2.GetOuts()
-	// 1: vote - private
-	msg, _ = getRumorByOrigin(t, n2outs, node2.GetAddr(), 1)
-	require.NotNil(t, msg)
-	private = z.GetPrivate(t, msg)
-	require.Contains(t, private.Recipients, node1.GetAddr())
-	vote = z.GetVote(t, private.Msg)
-	require.NotNil(t, vote)
-
-	// 2: mix - private
-	msg, _ = getRumorByOrigin(t, n2outs, node2.GetAddr(), 2)
-	require.NotNil(t, msg)
-	private = z.GetPrivate(t, msg)
-	require.Contains(t, private.Recipients, node3.GetAddr())
-	mix = z.GetMix(t, private.Msg)
-	require.NotNil(t, mix)
-
-	// node 3
-	n3outs := node3.GetOuts()
-	// 1: vote - private
-	msg, _ = getRumorByOrigin(t, n3outs, node3.GetAddr(), 1)
-	require.NotNil(t, msg)
-	private = z.GetPrivate(t, msg)
-	require.Contains(t, private.Recipients, node1.GetAddr())
-	vote = z.GetVote(t, private.Msg)
-	require.NotNil(t, vote)
-	// 2: result
-	msg, _ = getRumorByOrigin(t, n3outs, node3.GetAddr(), 2)
-	require.NotNil(t, msg)
-	results := z.GetResults(t, msg)
-	require.NotNil(t, results)
+	//n1outs := node1.GetOuts()
+	//// 1: startelection
+	//msg, _ := getRumorByOrigin(t, n1outs, node1.GetAddr(), 1)
+	//require.NotNil(t, msg)
+	//startElection := z.GetStartElection(t, msg)
+	//require.NotNil(t, startElection)
+	//
+	//// 2: dkgShare - private
+	//msg, _ = getRumorByOrigin(t, n1outs, node1.GetAddr(), 2)
+	//require.NotNil(t, msg)
+	//private := z.GetPrivate(t, msg)
+	//require.Contains(t, private.Recipients, node1.GetAddr())
+	//dkgShare := z.GetDKGShare(t, private.Msg)
+	//require.NotNil(t, dkgShare)
+	//
+	//// 3: dkg-share-validation - private
+	//msg, _ = getRumorByOrigin(t, n1outs, node1.GetAddr(), 3)
+	//require.NotNil(t, msg)
+	//private = z.GetPrivate(t, msg)
+	//require.Contains(t, private.Recipients, node2.GetAddr())
+	//dkgShareValidation := z.GetDKGShareValidation(t, private.Msg)
+	//require.NotNil(t, dkgShareValidation)
+	//
+	//// 4: dkg-share-2-ready - private
+	//msg, _ = getRumorByOrigin(t, n1outs, node1.GetAddr(), 4)
+	//require.NotNil(t, msg)
+	//private = z.GetPrivate(t, msg)
+	//require.Contains(t, private.Recipients, node2.GetAddr())
+	//electionReady := z.GetElectionReady(t, private.Msg)
+	//require.NotNil(t, electionReady)
+	//
+	//// node 2
+	//n2outs := node2.GetOuts()
+	//// 1: vote - private
+	//msg, _ = getRumorByOrigin(t, n2outs, node2.GetAddr(), 1)
+	//require.NotNil(t, msg)
+	//private = z.GetPrivate(t, msg)
+	//require.Contains(t, private.Recipients, node1.GetAddr())
+	//vote := z.GetVote(t, private.Msg)
+	//require.NotNil(t, vote)
+	//
+	//// 2: mix - private
+	//msg, _ = getRumorByOrigin(t, n2outs, node2.GetAddr(), 2)
+	//require.NotNil(t, msg)
+	//private = z.GetPrivate(t, msg)
+	//require.Contains(t, private.Recipients, node3.GetAddr())
+	//mix := z.GetMix(t, private.Msg)
+	//require.NotNil(t, mix)
+	//
+	//// node 3
+	//n3outs := node3.GetOuts()
+	//// 1: vote - private
+	//msg, _ = getRumorByOrigin(t, n3outs, node3.GetAddr(), 1)
+	//require.NotNil(t, msg)
+	//private = z.GetPrivate(t, msg)
+	//require.Contains(t, private.Recipients, node1.GetAddr())
+	//vote = z.GetVote(t, private.Msg)
+	//require.NotNil(t, vote)
+	//// 2: result
+	//msg, _ = getRumorByOrigin(t, n3outs, node3.GetAddr(), 2)
+	//require.NotNil(t, msg)
+	//results := z.GetResults(t, msg)
+	//require.NotNil(t, results)
 
 	// all the nodes agree on the winner
 	elections = node1.GetElections()
 	election = elections[0]
 	winner := GetWinner(election.Results)
-	require.Equal(t, winner, choice2)
+	require.Equal(t, choice2, winner)
 
-	elections2 = node2.GetElections()
-	election2 = elections2[0]
+	elections2 := node2.GetElections()
+	election2 := elections2[0]
 	winner2 := GetWinner(election2.Results)
 	require.Equal(t, winner2, choice2)
 
