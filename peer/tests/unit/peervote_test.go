@@ -2,9 +2,9 @@ package unit
 
 import (
 	"crypto/elliptic"
-	"crypto/rand"
 	"go.dedis.ch/cs438/types"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -169,10 +169,10 @@ func Test_ElectionThreeMixnetNodes(t *testing.T) {
 
 	mixnetServers := []string{node1.GetAddr(), node2.GetAddr(), node3.GetAddr()}
 
-	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*5)
+	electionID, err := node1.AnnounceElection("Election for Mayor", "El Cidad is looking for a new mayor", choices, mixnetServers, time.Second*4)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second)
 
 	elections := node1.GetElections()
 	election := elections[0]
@@ -181,21 +181,31 @@ func Test_ElectionThreeMixnetNodes(t *testing.T) {
 	require.Equal(t, electionID, election.Base.ElectionID)
 
 	choiceID := election.Base.Choices[0].ChoiceID
+	wait := sync.WaitGroup{}
+	wait.Add(3)
 
-	err = node1.Vote(elections[0].Base.ElectionID, choiceID)
-	require.NoError(t, err)
+	go func() {
+		defer wait.Done()
+		err = node1.Vote(elections[0].Base.ElectionID, choiceID)
+		require.NoError(t, err)
+	}()
+	go func() {
+		defer wait.Done()
+		err = node2.Vote(elections[0].Base.ElectionID, choiceID)
+		require.NoError(t, err)
+	}()
+	go func() {
+		defer wait.Done()
+		err = node3.Vote(elections[0].Base.ElectionID, choiceID)
+		require.NoError(t, err)
+	}()
 
-	err = node2.Vote(elections[0].Base.ElectionID, choiceID)
-	require.NoError(t, err)
-
-	err = node3.Vote(elections[0].Base.ElectionID, choiceID)
-	require.NoError(t, err)
+	wait.Wait()
+	time.Sleep(5 * time.Second)
 
 	// first mixnet node accepts the votes
 	votes := node1.GetElections()[0].Votes
 	require.Len(t, votes, 3)
-
-	time.Sleep(time.Second * 5)
 
 	elections = node1.GetElections()
 	election = elections[0]
@@ -617,11 +627,4 @@ func getRumorByOrigin(t *testing.T, pkts []transport.Packet, initiator string, s
 		}
 	}
 	return nil, nil
-}
-
-// GenerateRandomBigInt generates a random value in Zq
-func GenerateRandomBigInt() big.Int {
-	//Generate cryptographically strong pseudo-random between 0 - max
-	a, _ := rand.Int(rand.Reader, elliptic.P256().Params().N)
-	return *a
 }

@@ -98,7 +98,7 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 
 	election := n.electionStore.Get(dkgMessage.ElectionID)
 	if election == nil {
-		timeout := time.Second * 10
+		timeout := time.Second * 30
 		n.notfify.RegisterTimer(dkgMessage.ElectionID, timeout)
 		n.dkgMutex.Unlock()
 		_, ok := n.notfify.Wait(dkgMessage.ElectionID, timeout)
@@ -197,7 +197,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 
 	election := n.electionStore.Get(dkgShareValidationMessage.ElectionID)
 	if election == nil {
-		timeout := time.Second * 10
+		timeout := time.Second * 30
 		n.notfify.RegisterTimer(dkgShareValidationMessage.ElectionID, timeout)
 		n.dkgMutex.Unlock()
 		_, ok := n.notfify.Wait(dkgShareValidationMessage.ElectionID, timeout)
@@ -346,7 +346,6 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 				election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].Y =
 				elliptic.P256().ScalarBaseMult(make([]byte, 32))
 			if n.ShouldSendElectionReadyMessage(election) {
-				println("jej")
 				n.dkgMutex.Unlock()
 				n.sendElectionReadyMessage(election)
 				return nil
@@ -411,7 +410,7 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 	// update QualifiedCnt for each mixnet server
 	election := n.electionStore.Get(electionReadyMessage.ElectionID)
 	if election == nil {
-		timeout := time.Second * 10
+		timeout := time.Second * 30
 		n.notfify.RegisterTimer(electionReadyMessage.ElectionID, timeout)
 		n.dkgMutex.Unlock()
 		_, ok := n.notfify.Wait(electionReadyMessage.ElectionID, timeout)
@@ -428,8 +427,6 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 	election.Base.ElectionReadyCnt++
 
 	if election.IsElectionStarted() {
-		// todo election started, I am allowed to cast a vote
-		// todo display some kind of a message on frontend
 		election.VoteWG.Done()
 		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote", pkt.Header.Source)
 	}
@@ -446,6 +443,7 @@ func (n *node) sendStartElectionMessage(election *types.Election) {
 		ElectionID: election.Base.ElectionID,
 		Expiration: election.Base.Expiration,
 		PublicKey:  publicKey,
+		Initiator:  n.myAddr,
 	}
 
 	msg, err := marshalMessage(&startElectionMessage)
@@ -475,7 +473,7 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 
 	election := n.electionStore.Get(startElectionMessage.ElectionID)
 	if election == nil {
-		timeout := time.Second * 10
+		timeout := time.Second * 30
 		n.notfify.RegisterTimer(startElectionMessage.ElectionID, timeout)
 		n.dkgMutex.Unlock()
 		_, ok := n.notfify.Wait(startElectionMessage.ElectionID, timeout)
@@ -486,15 +484,20 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 		election = n.electionStore.Get(startElectionMessage.ElectionID)
 	}
 
-	election.Base.Initiators[pkt.Header.Source] = startElectionMessage.PublicKey
+	election.Base.Initiators[startElectionMessage.Initiator] = startElectionMessage.PublicKey
 	election.Base.Expiration = startElectionMessage.Expiration
 
 	if election.IsElectionStarted() {
-		// todo election started, I am allowed to cast a vote
-		// todo display some kind of a message on frontend
 		election.VoteWG.Done()
 		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote!")
 	}
+	//else {
+	//	initiator := election.GetFirstQualifiedInitiator()
+	//	_, e := election.Base.Initiators[initiator]
+	//
+	//	fmt.Printf("myaddr: %s | src %s, cnt %t, initiatortreba: %s,initiator ex: %t\n", n.myAddr, pkt.Header.Source, election.Base.ElectionReadyCnt == len(election.Base.MixnetServers), initiator, e)
+	//
+	//}
 
 	n.dkgMutex.Unlock()
 
@@ -525,6 +528,7 @@ func (n *node) InitiateElection(election *types.Election) {
 		// mix and forward
 		log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting mixing")
 		// send to ourselves a MixMessage (hop 0) so we can bootstrap the mixing process
+		election.MixingStartedTimestamp = time.Now()
 		n.Mix(election.Base.ElectionID, 0)
 	}()
 }

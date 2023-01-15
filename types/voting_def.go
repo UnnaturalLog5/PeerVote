@@ -29,9 +29,12 @@ type Election struct {
 	Base   ElectionBase
 	MyVote string
 	// choiceID -> count
-	Results map[string]uint
-	Votes   []string
-	VoteWG  sync.WaitGroup
+	Results                  map[string]uint
+	Votes                    []string
+	VoteWG                   sync.WaitGroup
+	ElectionStartedTimestamp time.Time
+	MixingStartedTimestamp   time.Time
+	ReceivedResultsTimestamp time.Time
 }
 
 // GetMyMixnetServerID returns the ID of the node within mixnet servers
