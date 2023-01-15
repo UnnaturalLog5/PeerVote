@@ -53,6 +53,10 @@ func (n *node) HandleVoteMessage(t types.Message, pkt transport.Packet) error {
 		return err
 	}
 
+	isValid, err := VerifyDlogOr(&voteMessage.CorrectVoteProof)
+	if err != nil || !isValid {
+		return errors.New("vote is not valid - failed to verify CorrectVoteProof")
+	}
 	election := n.electionStore.Get(voteMessage.ElectionID)
 
 	// accept if not expired

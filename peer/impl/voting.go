@@ -81,13 +81,22 @@ func (n *node) Vote(electionID string, choiceID int) error {
 	rScalar := GenerateRandomBigInt(elliptic.P256().Params().N)
 	encryptedVote := ElGamalEncryption(elliptic.P256(), &publicKey, &rScalar, plaintext)
 
-	value := big.NewInt(int64(choiceID)).Bytes()
+	// DLog proof
 	secretBit := choiceID == 1
-	//ProveDlogOr(value, publicKey,,,secretBit,elliptic.P256())
+	secretOther := make([]byte, 32)
+	pointOtherX, pointOtherY := elliptic.P256().ScalarBaseMult(secretOther)
+	pointOther := NewPoint(pointOtherX, pointOtherY)
+	proof, err := ProveDlogOr(rScalar.Bytes(), encryptedVote.Ct1, secretOther, pointOther, secretBit, elliptic.P256())
+
+	if err != nil {
+		return err
+	}
+
 	// broadcast as private message
 	voteMessage := types.VoteMessage{
-		ElectionID:    electionID,
-		EncryptedVote: *encryptedVote,
+		ElectionID:       electionID,
+		EncryptedVote:    *encryptedVote,
+		CorrectVoteProof: *proof,
 	}
 
 	if election.MyVote != -1 {
@@ -107,7 +116,7 @@ func (n *node) Vote(electionID string, choiceID int) error {
 	mixnetServer := election.GetFirstQualifiedInitiator()
 	n.dkgMutex.Unlock()
 
-	err := n.sendVoteMessage(mixnetServer, voteMessage)
+	err = n.sendVoteMessage(mixnetServer, voteMessage)
 	if err != nil {
 		return err
 	}
@@ -115,7 +124,7 @@ func (n *node) Vote(electionID string, choiceID int) error {
 	return nil
 }
 
-func (n *node) Mix(electionID string, hop uint, shuffleProofs []types.ShuffleProof) error {
+func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProof) error {
 	election := n.electionStore.Get(electionID)
 	votes := election.Votes
 

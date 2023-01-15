@@ -77,8 +77,8 @@ func (election *Election) GetPublicKey() Point {
 }
 
 // GetNextMixHop returns the ID of the next mixnet node for mixing
-func (election *Election) GetNextMixHop(hop uint) uint {
-	for i := hop + 1; i < uint(len(election.Base.MixnetServersPoints)); i++ {
+func (election *Election) GetNextMixHop(hop int) int {
+	for i := hop + 1; i < len(election.Base.MixnetServersPoints); i++ {
 		if election.Base.MixnetServersPoints[i] >= election.Base.Threshold {
 			return i
 		}
@@ -96,15 +96,15 @@ type AnnounceElectionMessage struct {
 }
 
 type VoteMessage struct {
-	ElectionID    string
-	EncryptedVote ElGamalCipherText
-	// Proof
+	ElectionID       string
+	EncryptedVote    ElGamalCipherText
+	CorrectVoteProof Proof
 }
 
 type MixMessage struct {
 	ElectionID string
 	Votes      []ElGamalCipherText
-	NextHop    uint
+	NextHop    int
 
 	// Proofs
 	ShuffleProofs []ShuffleProof
