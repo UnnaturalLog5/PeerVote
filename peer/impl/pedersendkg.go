@@ -508,7 +508,7 @@ func (n *node) InitiateElection(election *types.Election) {
 		// mix and forward
 		log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting mixing")
 		// send to ourselves a MixMessage (hop 0) so we can bootstrap the mixing process
-		n.Mix(election.Base.ElectionID, INITIAL_MIX_HOP, make([]types.ShuffleProof, 0))
+		n.Mix(election.Base.ElectionID, INITIAL_MIX_HOP, make([]types.ShuffleProof, 0), make([]types.Proof, 0))
 	}()
 }
 

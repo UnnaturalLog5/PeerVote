@@ -99,6 +99,7 @@ type VoteMessage struct {
 	ElectionID       string
 	EncryptedVote    ElGamalCipherText
 	CorrectVoteProof Proof
+	CorectEncProof   Proof
 }
 
 type MixMessage struct {
@@ -107,8 +108,8 @@ type MixMessage struct {
 	NextHop    int
 
 	// Proofs
-	ShuffleProofs []ShuffleProof
-	// ReencryptionProof Proof
+	ShuffleProofs      []ShuffleProof
+	ReEncryptionProofs []Proof
 }
 
 type ResultMessage struct {

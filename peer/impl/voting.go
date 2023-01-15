@@ -9,6 +9,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/types"
+	"golang.org/x/xerrors"
 )
 
 const (
@@ -81,22 +82,34 @@ func (n *node) Vote(electionID string, choiceID int) error {
 	rScalar := GenerateRandomBigInt(elliptic.P256().Params().N)
 	encryptedVote := ElGamalEncryption(elliptic.P256(), &publicKey, &rScalar, plaintext)
 
-	// DLog proof
-	secretBit := choiceID == 1
-	secretOther := make([]byte, 32)
-	pointOtherX, pointOtherY := elliptic.P256().ScalarBaseMult(secretOther)
-	pointOther := NewPoint(pointOtherX, pointOtherY)
-	proof, err := ProveDlogOr(rScalar.Bytes(), encryptedVote.Ct1, secretOther, pointOther, secretBit, elliptic.P256())
+	rPkX, rPkY := elliptic.P256().ScalarMult(publicKey.X, publicKey.Y, rScalar.Bytes())
+	rPkPoint := NewPoint(rPkX, rPkY)
+	correctEncProof, err := ProveDlogEq(rScalar.Bytes(), encryptedVote.Ct1, publicKey, rPkPoint, elliptic.P256())
 
 	if err != nil {
 		return err
 	}
+
+	// DLog OR proof for Chaum Pedersen
+	/*
+			secretBit := choiceID == 1
+			secretOther := make([]byte, 32)
+			pointOtherX, pointOtherY := elliptic.P256().ScalarBaseMult(secretOther)
+			pointOther := NewPoint(pointOtherX, pointOtherY)
+			proof, err := ProveDlogOr(rScalar.Bytes(), encryptedVote.Ct1, secretOther, pointOther, secretBit, elliptic.P256())
+
+
+		if err != nil {
+			return err
+		}
+	*/
 
 	// broadcast as private message
 	voteMessage := types.VoteMessage{
 		ElectionID:       electionID,
 		EncryptedVote:    *encryptedVote,
 		CorrectVoteProof: *proof,
+		CorectEncProof:   *correctEncProof,
 	}
 
 	if election.MyVote != -1 {
@@ -123,7 +136,7 @@ func (n *node) Vote(electionID string, choiceID int) error {
 	return nil
 }
 
-func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProof) error {
+func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProof, reEncProofs []types.Proof) error {
 	election := n.electionStore.Get(electionID)
 	votes := election.Votes
 
@@ -131,6 +144,7 @@ func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProo
 	voteCnt := len(votes)
 	election.Base.VotesPermutation = MakeRandomPermutation(voteCnt)
 
+	// TODO: check if permuting step is done correctly
 	permutedVotes := make([]types.ElGamalCipherText, voteCnt)
 	for i := 0; i < voteCnt; i++ {
 		permutedVotes[i] = votes[election.Base.VotesPermutation[i]]
@@ -141,13 +155,22 @@ func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProo
 
 	rScalars := GenerateRandomPolynomial(len(votes)-1, elliptic.P256().Params().N)
 
-	//todo dejan decryptShares := make([]types.ElGamalCipherText, voteCnt)
 	for i, permutedVote := range permutedVotes {
 		reencryptedVote := ElGamalReEncryption(elliptic.P256(), &publicKey, &rScalars[i], &permutedVote)
 
-		// todo decryptShare := MakeDecryptShare(reencryptedVote, publicKey,)
-		// decryptShares = append(decryptShares, )
+		DiffCt1X, DiffCt1Y := elliptic.P256().Add(reencryptedVote.Ct1.X, reencryptedVote.Ct1.Y, votes[election.Base.VotesPermutation[i]].Ct1.X, votes[election.Base.VotesPermutation[i]].Ct1.Y)
+		DiffCt1Point := NewPoint(DiffCt1X, DiffCt1Y)
 
+		DiffCt2X, DiffCt2Y := elliptic.P256().Add(reencryptedVote.Ct2.X, reencryptedVote.Ct2.Y, votes[election.Base.VotesPermutation[i]].Ct2.X, votes[election.Base.VotesPermutation[i]].Ct2.Y)
+		DiffCt2Point := NewPoint(DiffCt2X, DiffCt2Y)
+
+		// Mixnet needs to prove that reenecryption is done properly. This is also a proof of the correct decryption share.
+		reEncProof, err := ProveDlogEq(rScalars[i].Bytes(), DiffCt1Point, election.GetPublicKey(), DiffCt2Point, elliptic.P256())
+		if err != nil {
+			return xerrors.Errorf("Error in Mix function, when generating reEncryption Proof, %v", err)
+		}
+
+		reEncProofs = append(reEncProofs, *reEncProof)
 		reencryptedVotes = append(reencryptedVotes, *reencryptedVote)
 	}
 
@@ -175,11 +198,11 @@ func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProo
 	// otherwise continue forwarding to the next mixnet server
 
 	mixMessage := types.MixMessage{
-		ElectionID:    electionID,
-		Votes:         reencryptedVotes,
-		NextHop:       nextHop,
-		ShuffleProofs: shuffleProofs,
-		//		ReencryptionProof: reencryptionProof,
+		ElectionID:         electionID,
+		Votes:              reencryptedVotes,
+		NextHop:            nextHop,
+		ShuffleProofs:      shuffleProofs,
+		ReEncryptionProofs: reEncProofs,
 	}
 
 	// get address for next hop
@@ -198,6 +221,13 @@ func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProo
 
 func (n *node) Tally(electionID string, votes []types.ElGamalCipherText) {
 	election := n.electionStore.Get(electionID)
+
+	// Step 1: add all ct2's together; this aggregates all encrypted vote into "encrypted result"
+	electionResultX, electionResultY := votes[0].Ct2.X, votes[0].Ct2.Y
+	electionResult := NewPoint(electionResultX, electionResultY)
+	for i := 1; i < len(votes); i++ {
+		electionResult.X, electionResult.Y = elliptic.P256().Add(electionResult.X, electionResult.Y, votes[i].Ct2.X, votes[i].Ct2.Y)
+	}
 
 	// we want 0 to show up as a count as well
 	// inefficient, but doesn't matter

@@ -90,7 +90,7 @@ func (n *node) HandleMixMessage(t types.Message, pkt transport.Packet) error {
 		return errors.New("shuffle proof is not valid")
 	}
 
-	err = n.Mix(mixMessage.ElectionID, mixMessage.NextHop, mixMessage.ShuffleProofs)
+	err = n.Mix(mixMessage.ElectionID, mixMessage.NextHop, mixMessage.ShuffleProofs, mixMessage.ReEncryptionProofs)
 	if err != nil {
 		return err
 	}

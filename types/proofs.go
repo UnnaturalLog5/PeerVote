@@ -6,13 +6,19 @@ import (
 )
 
 type Proof struct {
-	ProofType        string
-	Curve            elliptic.Curve
-	BPointOther      []byte //basePointOther (for equality proof)
-	PPoint           []byte //publicPoint
-	PPointOther      []byte //publicPointOther (for equality proof)
-	CPoint           []byte //commitPoint
-	CPointOther      []byte //commitPointOhter (for equality proof)
+	ProofType   string
+	Curve       elliptic.Curve
+	BPointOther []byte //basePointOther (for equality proof)
+	PPoint      []byte //publicPoint
+	PPointOther []byte //publicPointOther (for equality proof)
+	CPoint      []byte //commitPoint
+	CPointOther []byte //commitPointOhter (for equality proof)
+
+	OtherBPointOther []byte //basePointOther (for equality proof)
+	OtherPPoint      []byte //publicPoint
+	OtherPPointOther []byte //publicPointOther (for equality proof)
+	OtherCPoint      []byte //commitPoint
+	OtherCPointOther []byte //commitPointOhter (for equality proof)
 	VerifierChall    []byte //verifier's issued public coins
 	ProverChall      []byte //prover's derived public coins for the first statement
 	ProverChallOther []byte //prover's derived public coins for the second statement
