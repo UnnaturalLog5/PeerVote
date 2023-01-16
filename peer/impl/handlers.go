@@ -62,10 +62,6 @@ func (n *node) HandleRumorsMessage(t types.Message, pkt transport.Packet) error 
 			Msg:    rumor.Msg,
 		}
 
-		if n.myAddr == "127.0.0.1:3" && rumor.Origin == "127.0.0.1:2" && rumor.Msg.Type != "private" {
-			log.Err(err).Str("peerAddr", n.myAddr).Msg("rumor could not locally process packet")
-		}
-
 		err := n.conf.MessageRegistry.ProcessPacket(rumorPkt)
 		if err != nil {
 			log.Err(err).Str("peerAddr", n.myAddr).Msg("rumor could not locally process packet")

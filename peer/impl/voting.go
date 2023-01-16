@@ -119,15 +119,24 @@ func (n *node) Vote(electionID string, choiceID int) error {
 		return errors.New("this peer has already voted")
 	}
 
+	// n.dkgMutex.Lock()
+	// if !election.IsElectionStarted() {
+	// n.dkgMutex.Unlock()
+	// return errors.New("election hasn't started yet")
+	// }
+
+	// election.MyVote = choiceID
+	// n.electionStore.Set(voteMessage.ElectionID, election)
+	// wait for the election to start
+	election.VoteWG.Wait()
+
 	n.dkgMutex.Lock()
-	if !election.IsElectionStarted() {
-		n.dkgMutex.Unlock()
-		return errors.New("election hasn't started yet")
-	}
+	//if !election.IsElectionStarted() {
+	//	n.dkgMutex.Unlock()
+	//	return errors.New("election hasn't started yet")
+	//}
 
 	election.MyVote = choiceID
-	n.electionStore.Set(voteMessage.ElectionID, election)
-
 	mixnetServer := election.GetFirstQualifiedInitiator()
 	n.dkgMutex.Unlock()
 

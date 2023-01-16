@@ -3,6 +3,7 @@ package impl
 import (
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -11,7 +12,6 @@ import (
 )
 
 func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Packet) error {
-	n.dkgMutex.Lock()
 
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling AnnounceElectionMessage from %v", pkt.Header.Source)
 
@@ -21,10 +21,15 @@ func (n *node) HandleAnnounceElectionMessage(t types.Message, pkt transport.Pack
 		return err
 	}
 
+	voteWG := sync.WaitGroup{}
+	voteWG.Add(1)
 	election := types.Election{
-		Base:   announceElectionMessage.Base,
-		MyVote: -1,
+		Base:                     announceElectionMessage.Base,
+		MyVote:                   -1,
+		VoteWG:                   &voteWG,
+		ElectionStartedTimestamp: time.Now(),
 	}
+	n.dkgMutex.Lock()
 
 	if n.electionStore.Exists(election.Base.ElectionID) {
 		return errors.New("election already exists")
@@ -105,13 +110,10 @@ func (n *node) HandleResultMessage(t types.Message, pkt transport.Packet) error 
 	}
 
 	// update election record
-	// TODO
-	// when updating winner, the mutex is unlocked
-	// should be unproblematic in this step
-	// but it _might_ cause some nasty bugs
 	election := n.electionStore.Get(resultMessage.ElectionID)
+	n.dkgMutex.Lock()
 	election.Results = resultMessage.Results
-	n.electionStore.Set(election.Base.ElectionID, election)
-
+	election.ReceivedResultsTimestamp = time.Now()
+	n.dkgMutex.Unlock()
 	return nil
 }

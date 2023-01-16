@@ -192,6 +192,49 @@ func Test_ZKP_DlogSimulator(t *testing.T) {
 	require.Equal(t, isTrue, true)
 }
 
+func Test_ZKP_DlogEqOr_True(t *testing.T) {
+	curve := elliptic.P256()
+	secret, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
+
+	fmt.Printf("In Test_ZKP_DlogEqOr_True, secret length: %v\n", len(secret))
+
+	if err != nil {
+		t.Errorf("Unexpected error, Key Generation failed: %v", err)
+	}
+
+	pPoint := impl.NewPoint(px, py)
+
+	_, box, boy, err := elliptic.GenerateKey(curve, cryptorand.Reader)
+
+	fmt.Printf("In Test_ZKP_DlogEqOr_True, length of secret is: %d \n", len(secret))
+
+	bPointOther := impl.NewPoint(box, boy)
+
+	pPointOtherX, bPointOtherY := curve.ScalarMult(bPointOther.X, bPointOther.Y, secret)
+	pPointOther := impl.NewPoint(pPointOtherX, bPointOtherY)
+
+	secretBit := true
+
+	fmt.Printf("In Test_ZKP_DlogEqOr_True, secret is: %v \n", secret)
+
+	fmt.Printf("In Test_ZKP_DlogEqOr_True, pPoint is: (%v, %v) \n", pPoint.X, pPoint.Y)
+	fmt.Printf("In Test_ZKP_DlogEqOr_True, bPointOther is: (%v, %v) \n", bPointOther.X, bPointOther.Y)
+
+	proof, err := impl.ProveDlogEqOr(secret, pPoint, bPointOther, pPointOther, curve, secretBit)
+
+	// proof, err := impl.ProveDlogOr(secret, pPoint, bPointOther, secretBit, curve)
+
+	if err != nil {
+		t.Errorf("Unexpected error, ProveDlogOr failed: %v", err)
+	}
+
+	isTrue := impl.VerifyDlogEqOr(proof)
+
+	fmt.Printf("In Test_ZKP_DlogOr_True, verifier returns: %v \n", isTrue)
+
+	require.Equal(t, true, isTrue)
+}
+
 func Test_ZKP_DlogOr_True(t *testing.T) {
 	curve := elliptic.P256()
 	secret, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)

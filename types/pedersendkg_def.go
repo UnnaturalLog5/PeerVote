@@ -63,4 +63,5 @@ type StartElectionMessage struct {
 	ElectionID string
 	Expiration time.Time
 	PublicKey  Point
+	Initiator  string
 }

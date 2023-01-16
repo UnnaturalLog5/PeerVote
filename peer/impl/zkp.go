@@ -1545,6 +1545,11 @@ func ProveDlogEqOr(secret Value, pPoint, bPointOther, pPointOther types.Point, c
 	// Derive parameters of the elliptic curve
 	curveParams := curve.Params()
 
+	fmt.Printf("Secret scalar is %v\n", new(big.Int).SetBytes(secret).Uint64())
+	fmt.Printf("pPoint is (%v,%v)\n", pPoint.X, pPoint.Y)
+	fmt.Printf("bPointOther is (%v,%v)\n", pPoint.X, pPoint.Y)
+	fmt.Printf("pPointOther is (%v,%v)\n", pPoint.X, pPoint.Y)
+
 	// Marshall proof instance to bytes
 	pPointCompressed := elliptic.MarshalCompressed(curve, pPoint.X, pPoint.Y)
 	bPointOtherCompressed := elliptic.MarshalCompressed(curve, bPointOther.X, bPointOther.Y)
@@ -1567,22 +1572,26 @@ func ProveDlogEqOr(secret Value, pPoint, bPointOther, pPointOther types.Point, c
 	fakepPoint := NewPoint(fakepPointX, fakepPointY)
 	fakepPointOther := NewPoint(fakePOtherX, fakePOtherY)
 
+	fmt.Printf("fakepPoint is (%v,%v)\n", pPoint.X, pPoint.Y)
+	fmt.Printf("fakepPointOther is (%v,%v)\n", pPoint.X, pPoint.Y)
+
 	fakepPointCompressed := elliptic.MarshalCompressed(curve, fakepPoint.X, fakepPoint.Y)
 	fakepPointOtherCompressed := elliptic.MarshalCompressed(curve, fakepPoint.X, fakepPoint.Y)
 
 	// Append proof instance values to the transcript
-	// TODO: if secret bit
+	// TODO: if secret bit, then we DON'T do flipping
 	if secretBit {
+		// Append honest public points first
 		transcript.AppendMessage(proofTypeBytes, bPointOtherCompressed)
 		transcript.AppendMessage(proofTypeBytes, pPointCompressed)
 		transcript.AppendMessage(proofTypeBytes, pPointOtherCompressed)
 
-		// Append the fake generated messages
+		//Then Append the fake generated public points
 		transcript.AppendMessage(proofTypeBytes, bPointOtherCompressed)
 		transcript.AppendMessage(proofTypeBytes, fakepPointCompressed)
 		transcript.AppendMessage(proofTypeBytes, fakepPointOtherCompressed)
 	} else {
-		// Append the fake generated messages
+		// Append the fake generated public points
 		transcript.AppendMessage(proofTypeBytes, bPointOtherCompressed)
 		transcript.AppendMessage(proofTypeBytes, fakepPointCompressed)
 		transcript.AppendMessage(proofTypeBytes, fakepPointOtherCompressed)
@@ -1598,7 +1607,7 @@ func ProveDlogEqOr(secret Value, pPoint, bPointOther, pPointOther types.Point, c
 	// Derive seed based on which the commitment scalar is derived
 	commitRandSeed, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
-		return nil, xerrors.Errorf("Error in ProveDlogEq: %v", err)
+		return nil, xerrors.Errorf("Error in ProveDlogEqOr: %v", err)
 	}
 
 	// Build randomness generator for the commitment value
@@ -1611,35 +1620,43 @@ func ProveDlogEqOr(secret Value, pPoint, bPointOther, pPointOther types.Point, c
 	}
 
 	commitScalarBytes := trPrg.GetRandomness(SCALAR_SIZE)
+	trueCommitScalar := new(big.Int).SetBytes(commitScalarBytes)
+	trueCommitScalar.Mod(trueCommitScalar, curveParams.N)
+
+	fmt.Printf("trueCommitScalar scalar is %v\n", trueCommitScalar.Uint64())
 
 	// Create placeholders for the two commitment points
 	cPoint := types.Point{}
 	cPointOther := types.Point{}
 
 	// Compute cPoint = c*G where G is the base point of the curve
-	cPoint.X, cPoint.Y = curve.ScalarBaseMult(commitScalarBytes)
+	cPoint.X, cPoint.Y = curve.ScalarBaseMult(trueCommitScalar.Bytes())
 	cPointCompressed := elliptic.MarshalCompressed(curve, cPoint.X, cPoint.Y)
 
+	fmt.Printf("cPoint is (%v,%v)\n", cPoint.X, cPoint.Y)
+
 	// Compute cPoint = c*G' where G' is the base point of the curve (and G != G')
-	cPointOther.X, cPointOther.Y = curve.ScalarMult(bPointOther.X, bPointOther.Y, commitScalarBytes)
+	cPointOther.X, cPointOther.Y = curve.ScalarMult(bPointOther.X, bPointOther.Y, trueCommitScalar.Bytes())
 	cPointOtherCompressed := elliptic.MarshalCompressed(curve, cPointOther.X, cPointOther.Y)
+
+	fmt.Printf("cPointOther is (%v,%v)\n", cPointOther.X, cPointOther.Y)
 
 	// For the fake case: Derive random challenge for the simulation using the transcript
 	simRandSeed, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
-		return nil, xerrors.Errorf("Error in ProveDlogOR: %v", err)
+		return nil, xerrors.Errorf("Error in ProveDlogEqOr: %v", err)
 	}
 
 	trPRGbuilder = transcript.BuildRng()
 	trPRGbuilder.RekeyWitnessBytes(proofTypeBytes, simRandSeed.Bytes())
 	trPRG, err := trPRGbuilder.Finalize(proofTypeBytes)
 	if err != nil {
-		return nil, xerrors.Errorf("Error in ProveDlogOR: %v", err)
+		return nil, xerrors.Errorf("Error in ProveDlogEqOr: %v", err)
 	}
 
 	// For the fake case: Generate fake challenge bytes (As if they came from the verifier)
 	fakeChallBytes := trPRG.GetRandomness(SCALAR_SIZE)
-	fmt.Printf("In ProveDlogOr, fakeChallBytes: %v\n", fakeChallBytes)
+	fmt.Printf("In ProveDlogEqOr, fakeChallBytes: %v\n", fakeChallBytes)
 
 	// Use simulator for the proof ot the DLOG to create the fake (but accepting transcirpt)
 
@@ -1650,12 +1667,14 @@ func ProveDlogEqOr(secret Value, pPoint, bPointOther, pPointOther types.Point, c
 	if secretBit {
 		transcript.AppendMessage(proofTypeBytes, cPointCompressed)
 		transcript.AppendMessage(proofTypeBytes, cPointOtherCompressed)
+
 		transcript.AppendMessage(proofTypeBytes, fakeCPointCompressed)
 		transcript.AppendMessage(proofTypeBytes, fakeCPointOtherCompressed)
 	} else {
 
 		transcript.AppendMessage(proofTypeBytes, fakeCPointCompressed)
 		transcript.AppendMessage(proofTypeBytes, fakeCPointOtherCompressed)
+
 		transcript.AppendMessage(proofTypeBytes, cPointCompressed)
 		transcript.AppendMessage(proofTypeBytes, cPointOtherCompressed)
 	}
@@ -1663,28 +1682,39 @@ func ProveDlogEqOr(secret Value, pPoint, bPointOther, pPointOther types.Point, c
 	// Generate verifier's challenge bytes from the current transcript state
 	verifierChallBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
 
+	fmt.Printf("In ProveDlogEqOr, VerifierChallBytes: %v\n", verifierChallBytes)
+
 	// Derive challenge bytes for the true case  by xoring the chall bytes received
 	// from the verifier with the fake challenge bytes
 	trueChallBytes := make([]byte, len(verifierChallBytes))
 	for i, val := range verifierChallBytes {
 		trueChallBytes[i] = val ^ fakeChallBytes[i]
 	}
-	fmt.Printf("In ProveDlogOr, trueChallBytes: %v\n", trueChallBytes)
+
+	fmt.Printf("In ProveDlogEqOr, trueChallBytes: %v\n", trueChallBytes)
 
 	// Cast the secret x as a scalar
 	trueSecretScalar := new(big.Int).SetBytes(secret)
 
+	fmt.Printf("In ProveDlogEqOr, trueSecretScalar (redundant, but helpful): %v\n", trueSecretScalar.Uint64())
+
 	// Cast the commitment c as a scalar
-	trueCommitScalar := new(big.Int).SetBytes(commitScalarBytes)
+	// trueCommitScalar := new(big.Int).SetBytes(commitScalarBytes)
 
 	// Cast chall as scalar (verifier's public coins)
 	trueChallScalar := new(big.Int).SetBytes(trueChallBytes)
 
+	fmt.Printf("In ProveDlogEqOr, trueChallScalar is: %v\n", trueChallScalar.Uint64())
+
 	// Compute x*chall (mod N, where N is the order of base point)
 	trueBlindedScalar := new(big.Int).Mod(new(big.Int).Mul(trueSecretScalar, trueChallScalar), curveParams.N)
 
+	fmt.Printf("In ProveDlogEqOr, trueBlindedScalar is: %v\n", trueChallScalar.Uint64())
+
 	// Computes z=c-chall*x (mod N, where N is the order of the base point)
 	trueResult := new(big.Int).Mod(new(big.Int).Sub(trueCommitScalar, trueBlindedScalar), curveParams.N)
+
+	fmt.Printf("In ProveDlogEqOr, trueResult is: %v\n", trueChallScalar.Uint64())
 
 	// Store the results into the proof structure
 	if secretBit { //if secret bit is true we put honest first
@@ -1735,20 +1765,35 @@ func ProveDlogEqOr(secret Value, pPoint, bPointOther, pPointOther types.Point, c
 
 func SimulatorDlogEq(challBytes []byte, trPRG *TranscriptRng, curve elliptic.Curve, pPoint, bPointOther, pPointOther types.Point) ([]byte, []byte, []byte, *big.Int) {
 
+	//Generate the 3rd message of the protocol first (this is the blinded scalar z)
 	result := GenerateRandomBigInt(curve.Params().N)
 
-	resultbPointX, resultbPointY := curve.ScalarBaseMult(result.Bytes())
-	// resultbPoint := NewPoint(resultbPointX, resultbPointY)
+	fmt.Printf("In Simulator pPoint is:(%v, %v) \n", pPoint.X, pPoint.Y)
+	fmt.Printf("In Simulator bPointOther is:(%v, %v) \n", bPointOther.X, bPointOther.Y)
+	fmt.Printf("In Simulator pPointOther is:(%v, %v) \n", pPointOther.X, pPointOther.Y)
+	fmt.Printf("In Simulator chall is:%v \n", new(big.Int).SetBytes(challBytes))
 
-	resultbPointOtherX, resultbPointOtherY := curve.ScalarBaseMult(result.Bytes())
-	// resultbPointOther := NewPoint(resultbPointOtherX, resultbPointOtherY)
+	fmt.Printf("In simulator, result (z) is %v\n", new(big.Int).Set(&result))
+
+	// Generate the z*G point, where G is the generator
+	resultbPointX, resultbPointY := curve.ScalarBaseMult(result.Bytes())
+
+	fmt.Printf("In Simulator z*G is:(%v, %v) \n", resultbPointX, resultbPointY)
+
+	resultbPointOtherX, resultbPointOtherY := curve.ScalarMult(bPointOther.X, bPointOther.Y, result.Bytes())
+	fmt.Printf("In Simulator, z*G' is:(%v, %v) \n", resultbPointOtherX, resultbPointOtherY)
 
 	challPpointX, challPpointY := curve.ScalarMult(pPoint.X, pPoint.Y, challBytes)
 	challPpointOtherX, challPpointOtherY := curve.ScalarMult(pPointOther.X, pPointOther.Y, challBytes)
 
+	fmt.Printf("In Simulator, chall*P is:(%v, %v) \n", challPpointX, challPpointY)
+	fmt.Printf("In Simulator, chall*P' is:(%v, %v) \n", challPpointOtherX, challPpointOtherY)
+
 	cPointX, cPointY := curve.Add(resultbPointX, resultbPointY, challPpointX, challPpointY)
+	fmt.Printf("In Simulator, a*G is:(%v, %v) \n", cPointX, cPointY)
 
 	cPointOtherX, cPointOtherY := curve.Add(resultbPointOtherX, resultbPointOtherY, challPpointOtherX, challPpointOtherY)
+	fmt.Printf("In Simulator, a*G' is:(%v, %v) \n", cPointOtherX, cPointOtherY)
 
 	cPointCompressed := elliptic.MarshalCompressed(curve, cPointX, cPointY)
 	cPointOtherCompressed := elliptic.MarshalCompressed(curve, cPointOtherX, cPointOtherY)
@@ -1764,9 +1809,24 @@ func VerifyDlogEqOr(proof *types.Proof) bool {
 	// Initialize protocol transcript
 	transcript := NewTranscript(DLOG_OR_EQ_LABEL)
 
+	transcript.AppendMessage(proofTypeBytes, proof.BPointOther)
+	transcript.AppendMessage(proofTypeBytes, proof.PPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.PPointOther)
+
+	//Then Append the fake generated public points
+	transcript.AppendMessage(proofTypeBytes, proof.OtherBPointOther)
+	transcript.AppendMessage(proofTypeBytes, proof.OtherPPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.OtherPPointOther)
+
+	transcript.AppendMessage(proofTypeBytes, proof.CPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.CPointOther)
+
+	transcript.AppendMessage(proofTypeBytes, proof.OtherCPoint)
+	transcript.AppendMessage(proofTypeBytes, proof.OtherCPointOther)
+
 	// Derive challenge bytes based on the state of the current transcript
 	verifierChallBytes := transcript.GetChallengeBytes(proofTypeBytes, SCALAR_SIZE)
-	fmt.Printf("In VerifyDlog, DERIVED verifierChall: %v\n", verifierChallBytes)
+	fmt.Printf("In VerifyDlogEqOr, DERIVED verifierChall: %v\n", verifierChallBytes)
 
 	// Begin checking if the verifier challenge is correctly derived
 	checkBytesXor := true
@@ -1802,47 +1862,75 @@ func VerifyDlogEqOr(proof *types.Proof) bool {
 		Result:        proof.ResultOther,
 	}
 
-	return checkBytesXor && VerifyDlogEqRelation(&proof01) && VerifyDlogEqRelation(&proof02)
+	res01 := VerifyDlogEqRelation(&proof01)
+	res02 := VerifyDlogEqRelation(&proof02)
+	fmt.Printf("CheckBytesXor %v, Res01 %v, Res02 %v,", checkBytesXor, res01, res02)
+
+	return checkBytesXor && res01 && res02
+
 }
 
 func VerifyDlogEqRelation(proof *types.Proof) bool {
 	// Derive P from the proof
 	pPoint := types.Point{}
 	pPoint.X, pPoint.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.PPoint)
+	fmt.Printf("In VerifyDlogEqRelation, pPoint is: (%v,%v)\n", pPoint.X, pPoint.Y)
 
 	// Compute chall*P
 	gAddend01 := types.Point{}
 	gAddend01.X, gAddend01.Y = proof.Curve.ScalarMult(pPoint.X, pPoint.Y, proof.VerifierChall)
+	fmt.Printf("In VerifyDlogEqRelation, chall*P is: (%v,%v)\n", gAddend01.X, gAddend01.Y)
 
 	// Compute z*G (where z=c-chall*x)
 	gAddend02 := types.Point{}
 	gAddend02.X, gAddend02.Y = proof.Curve.ScalarBaseMult(proof.Result.Bytes())
 
+	fmt.Printf("In VerifyDlogEqRelation, result is: %v\n", proof.Result)
+	fmt.Printf("In VerifyDlogEqRelation, z*G is: (%v,%v)\n", gAddend02.X, gAddend02.Y)
+
 	// Compute chall*P + z*G
 	resultFirst := types.Point{}
 	resultFirst.X, resultFirst.Y = proof.Curve.Add(gAddend01.X, gAddend01.Y, gAddend02.X, gAddend02.Y)
+	fmt.Printf("In VerifyDlogEqRelation, chall*P + z*G is: (%v,%v)\n", resultFirst.X, resultFirst.Y)
 
-	// Begin deriving components for checking if P=x*G
+	// Begin deriving components for the check
 
 	gPrimeAddend01 := types.Point{}
 	pPointOther := types.Point{}
 	pPointOther.X, pPointOther.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.PPointOther)
-	gPrimeAddend01.X, gPrimeAddend01.Y = proof.Curve.ScalarMult(pPointOther.X, pPointOther.Y, proof.VerifierChall)
+	fmt.Printf("In VerifyDlogEqRelation, pPointOther is: (%v,%v)\n", pPointOther.X, pPointOther.Y)
 
-	// Checks for the other pair (corresponds to checks for G')
+	// Compute chall*P'
+	gPrimeAddend01.X, gPrimeAddend01.Y = proof.Curve.ScalarMult(pPointOther.X, pPointOther.Y, proof.VerifierChall)
+	fmt.Printf("In VerifyDlogEqRelation, chall*P' is: (%v,%v)\n", gPrimeAddend01.X, gPrimeAddend01.Y)
+
 	bPointOther := types.Point{}
+
 	gPrimeAddend02 := types.Point{}
 	bPointOther.X, bPointOther.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.BPointOther)
-	gPrimeAddend02.X, gPrimeAddend02.Y = proof.Curve.ScalarMult(bPointOther.X, bPointOther.Y, proof.Result.Bytes())
+	fmt.Printf("In VerifyDlogEqRelation, bPointOther is: (%v,%v)\n", bPointOther.X, bPointOther.Y)
 
+	// Compute z*G', where G' is the other base point
+	gPrimeAddend02.X, gPrimeAddend02.Y = proof.Curve.ScalarMult(bPointOther.X, bPointOther.Y, proof.Result.Bytes())
+	fmt.Printf("In VerifyDlogEqRelation, z*G' is: (%v,%v)\n", gPrimeAddend02.X, gPrimeAddend02.Y)
+
+	// Compute chall*P' + z*G'
 	resultSecond := types.Point{}
 	resultSecond.X, resultSecond.Y = proof.Curve.Add(gPrimeAddend01.X, gPrimeAddend01.Y, gPrimeAddend02.X, gPrimeAddend02.Y)
+	fmt.Printf("In VerifyDlogEqRelation, chall*P' + z*G' is: (%v,%v)\n", resultSecond.X, resultSecond.Y)
 
+	//Unmarshall the first message pair (first commitment message)
 	cPoint := types.Point{}
 	cPoint.X, cPoint.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.CPoint)
+	fmt.Printf("In VerifyDlogEqRelation, cPoint is: (%v,%v)\n", cPoint.X, cPoint.Y)
 
+	//Unmarshall the first message pair (second commitment message)
 	cPointOther := types.Point{}
 	cPointOther.X, cPointOther.Y = elliptic.UnmarshalCompressed(proof.Curve, proof.CPointOther)
+	fmt.Printf("In VerifyDlogEqRelation, cPointOther is: (%v,%v)\n", cPointOther.X, cPointOther.Y)
+
+	fmt.Printf("In VerifyDlogEqRelation %v, %v, %v, %v\n", cPoint.X.Cmp(resultFirst.X) == 0, cPoint.Y.Cmp(resultFirst.Y) == 0, cPointOther.X.Cmp(resultSecond.X) == 0, cPointOther.Y.Cmp(resultSecond.Y) == 0)
+
 	return cPoint.X.Cmp(resultFirst.X) == 0 && cPoint.Y.Cmp(resultFirst.Y) == 0 && cPointOther.X.Cmp(resultSecond.X) == 0 && cPointOther.Y.Cmp(resultSecond.Y) == 0
 
 }

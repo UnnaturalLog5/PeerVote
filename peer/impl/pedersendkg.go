@@ -99,7 +99,7 @@ func (n *node) HandleDKGShareMessage(msg types.Message, pkt transport.Packet) er
 
 	election := n.electionStore.Get(dkgMessage.ElectionID)
 	if election == nil {
-		timeout := time.Second * 10
+		timeout := time.Second * 30
 		n.notfify.RegisterTimer(dkgMessage.ElectionID, timeout)
 		n.dkgMutex.Unlock()
 		_, ok := n.notfify.Wait(dkgMessage.ElectionID, timeout)
@@ -198,7 +198,7 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 
 	election := n.electionStore.Get(dkgShareValidationMessage.ElectionID)
 	if election == nil {
-		timeout := time.Second * 10
+		timeout := time.Second * 30
 		n.notfify.RegisterTimer(dkgShareValidationMessage.ElectionID, timeout)
 		n.dkgMutex.Unlock()
 		_, ok := n.notfify.Wait(dkgShareValidationMessage.ElectionID, timeout)
@@ -312,30 +312,44 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 	log.Info().Str("peerAddr", n.myAddr).Msgf("handling DKGRevealShareMessage from %v", pkt.Header.Source)
 
 	election := n.electionStore.Get(dkgRevealShareMessage.ElectionID)
-	// todo what if node hasn't received ElectionAnnounceMessage yet?
-	// add some kind of synchronization
 
+	n.dkgMutex.Lock()
 	mixnetServers := election.Base.MixnetServers
 
 	if !contains(mixnetServers, n.myAddr) {
+		n.dkgMutex.Unlock()
 		return fmt.Errorf("node received DKGShareValidationMessage for electionID %s,"+
 			" but the node is not one of the mixnetServers", dkgRevealShareMessage.ElectionID)
 	}
 
-	if election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus == types.NOT_DECIDED_YET {
+	mixnetServerInfo := election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID]
+	if mixnetServerInfo == nil {
+		mixnetServerInfo = &types.MixnetServerInfo{
+			ReceivedShare:   big.Int{},
+			X:               make([]types.Point, len(election.Base.MixnetServers)),
+			VerifiedCnt:     0,
+			ComplainedCnt:   0,
+			QualifiedStatus: types.NOT_DECIDED_YET,
+		}
+		election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID] = mixnetServerInfo
+	}
 
+	if election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus == types.NOT_DECIDED_YET {
 		j := big.NewInt(int64(dkgRevealShareMessage.MixnetServerID))
 		share := dkgRevealShareMessage.Share
 		X := election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X
 		isValid := n.VerifyEquation(j, &share, X, election.Base.Threshold)
 
 		if !isValid {
+
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].X,
 				election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].Y =
 				elliptic.P256().ScalarBaseMult(make([]byte, 32))
 			if n.ShouldSendElectionReadyMessage(election) {
+				n.dkgMutex.Unlock()
 				n.sendElectionReadyMessage(election)
+				return nil
 			}
 		} else {
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].VerifiedCnt++
@@ -343,12 +357,15 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 			if election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].VerifiedCnt == len(election.Base.MixnetServers) {
 				election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.QUALIFIED
 				if n.ShouldSendElectionReadyMessage(election) {
+					n.dkgMutex.Unlock()
 					n.sendElectionReadyMessage(election)
+					return nil
 				}
 			}
 		}
 	}
 
+	n.dkgMutex.Unlock()
 	return nil
 }
 
@@ -394,7 +411,7 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 	// update QualifiedCnt for each mixnet server
 	election := n.electionStore.Get(electionReadyMessage.ElectionID)
 	if election == nil {
-		timeout := time.Second * 10
+		timeout := time.Second * 30
 		n.notfify.RegisterTimer(electionReadyMessage.ElectionID, timeout)
 		n.dkgMutex.Unlock()
 		_, ok := n.notfify.Wait(electionReadyMessage.ElectionID, timeout)
@@ -411,9 +428,7 @@ func (n *node) HandleElectionReadyMessage(msg types.Message, pkt transport.Packe
 	election.Base.ElectionReadyCnt++
 
 	if election.IsElectionStarted() {
-		// todo marc & vasilije election started, I am allowed to cast a vote
-		// todo display some kind of a message on frontend
-
+		election.VoteWG.Done()
 		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote", pkt.Header.Source)
 	}
 	n.dkgMutex.Unlock()
@@ -429,6 +444,7 @@ func (n *node) sendStartElectionMessage(election *types.Election) {
 		ElectionID: election.Base.ElectionID,
 		Expiration: election.Base.Expiration,
 		PublicKey:  publicKey,
+		Initiator:  n.myAddr,
 	}
 
 	msg, err := marshalMessage(&startElectionMessage)
@@ -458,7 +474,7 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 
 	election := n.electionStore.Get(startElectionMessage.ElectionID)
 	if election == nil {
-		timeout := time.Second * 10
+		timeout := time.Second * 30
 		n.notfify.RegisterTimer(startElectionMessage.ElectionID, timeout)
 		n.dkgMutex.Unlock()
 		_, ok := n.notfify.Wait(startElectionMessage.ElectionID, timeout)
@@ -469,14 +485,20 @@ func (n *node) HandleStartElectionMessage(msg types.Message, pkt transport.Packe
 		election = n.electionStore.Get(startElectionMessage.ElectionID)
 	}
 
-	election.Base.Initiators[pkt.Header.Source] = startElectionMessage.PublicKey
+	election.Base.Initiators[startElectionMessage.Initiator] = startElectionMessage.PublicKey
 	election.Base.Expiration = startElectionMessage.Expiration
 
 	if election.IsElectionStarted() {
-		// todo election started, I am allowed to cast a vote
-		// todo display some kind of a message on frontend
+		election.VoteWG.Done()
 		log.Info().Str("peerAddr", n.myAddr).Msgf("election started, I am allowed to cast a vote!")
 	}
+	//else {
+	//	initiator := election.GetFirstQualifiedInitiator()
+	//	_, e := election.Base.Initiators[initiator]
+	//
+	//	fmt.Printf("myaddr: %s | src %s, cnt %t, initiatortreba: %s,initiator ex: %t\n", n.myAddr, pkt.Header.Source, election.Base.ElectionReadyCnt == len(election.Base.MixnetServers), initiator, e)
+	//
+	//}
 
 	n.dkgMutex.Unlock()
 
@@ -508,6 +530,8 @@ func (n *node) InitiateElection(election *types.Election) {
 		log.Info().Str("peerAddr", n.myAddr).Msgf("Election expired, starting mixing")
 		// send to ourselves a MixMessage (hop 0) so we can bootstrap the mixing process
 		n.Mix(election.Base.ElectionID, INITIAL_MIX_HOP, make([]types.ShuffleProof, 0), make([]types.Proof, 0))
+		election.MixingStartedTimestamp = time.Now()
+		// n.Mix(election.Base.ElectionID, 0)
 	}()
 }
 

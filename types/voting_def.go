@@ -2,6 +2,7 @@ package types
 
 import (
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -30,13 +31,19 @@ type Election struct {
 	Base   ElectionBase
 	MyVote int
 	// choiceID -> count
-	Results map[int]uint
-	Votes   []VoteMessage
+	Results                  map[int]uint
+	Votes                    []VoteMessage
+	VoteWG                   *sync.WaitGroup
+	ElectionStartedTimestamp time.Time
+	MixingStartedTimestamp   time.Time
+	ReceivedResultsTimestamp time.Time
 }
 
 type ElGamalCipherText struct {
 	Ct1 Point
 	Ct2 Point
+	// Results map[string]uint
+	// Votes   []string
 }
 
 // GetMyMixnetServerID returns the ID of the node within mixnet servers
@@ -57,6 +64,7 @@ func (election *Election) IsElectionStarted() bool {
 	}
 	initiator := election.GetFirstQualifiedInitiator()
 	_, exists := election.Base.Initiators[initiator]
+
 	return exists
 }
 
