@@ -10,8 +10,9 @@ package impl
 import (
 	"crypto/elliptic"
 	"crypto/rand"
-	"go.dedis.ch/cs438/types"
 	"math/big"
+
+	"go.dedis.ch/cs438/types"
 
 	"golang.org/x/xerrors"
 )
@@ -26,10 +27,10 @@ type BSGSPoint struct {
 func MakeDecryptShare(ciphertext *types.ElGamalCipherText, publicShare *types.Point, secretShare []byte) (*types.Point, *types.Proof, error) {
 	curve := elliptic.P256()
 
-	shareCtPointX, shareCtPointY := curve.ScalarMult(ciphertext.Ct1.X, ciphertext.Ct1.Y, secretShare)
+	shareCtPointX, shareCtPointY := curve.ScalarMult(&ciphertext.Ct1.X, &ciphertext.Ct1.Y, secretShare)
 	shareCtPoint := types.Point{}
-	shareCtPoint.X = shareCtPointX
-	shareCtPoint.Y = shareCtPointY
+	shareCtPoint.X = *shareCtPointX
+	shareCtPoint.Y = *shareCtPointY
 
 	bPointOther := types.Point{}
 	bPointOther.X = ciphertext.Ct1.X
@@ -49,14 +50,19 @@ func RecoverVoteCount(cipherText *types.ElGamalCipherText, shareCtPointList []ty
 	minusOne := new(big.Int).Sub(curveParams.N, big.NewInt(1))
 
 	result := types.Point{}
-	result.X.Set(cipherText.Ct2.X)
-	result.Y.Set(cipherText.Ct2.Y)
+	result.X.Set(&cipherText.Ct2.X)
+	result.Y.Set(&cipherText.Ct2.Y)
 
 	for _, p := range shareCtPointList {
 		minusP := types.Point{}
-		minusP.X, minusP.Y = curve.ScalarMult(p.X, p.Y, minusOne.Bytes())
+		//  = curve.ScalarMult(&p.X, &p.Y, minusOne.Bytes())
 
-		result.X, result.Y = curve.Add(result.X, result.Y, minusP.X, minusP.Y)
+		minusPX, minusPY := curve.ScalarMult(&p.X, &p.Y, minusOne.Bytes())
+
+		minusP.X, minusP.Y = *minusPX, *minusPY
+
+		resX, resY := curve.Add(&result.X, &result.Y, &minusP.X, &minusP.Y)
+		result.X, result.Y = *resX, *resY
 	}
 
 	return BsgsFunction(&result, curve, participantNum)
@@ -107,7 +113,7 @@ func BsgsFunction(target *types.Point, curve elliptic.Curve, participantNum int)
 
 		prodBaseX, prodBaseY := curve.ScalarBaseMult(negProd.Bytes())
 
-		challPointX, challPointY := curve.Add(target.X, target.Y, prodBaseX, prodBaseY)
+		challPointX, challPointY := curve.Add(&target.X, &target.Y, prodBaseX, prodBaseY)
 		// fmt.Printf("For dlog %d, Stored Point is (%d,%d):\n", i, challPointX, challPointY)
 
 		challP := BSGSPoint{

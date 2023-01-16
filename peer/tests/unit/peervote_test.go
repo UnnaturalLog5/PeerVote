@@ -590,7 +590,8 @@ func CreateInvalidDKGShareMessage(electionID string, threshold int, mixnetServer
 	X := make([]types.Point, threshold+1)
 	tmp := make([]byte, 32)
 	for i := 0; i < threshold+1; i++ {
-		X[i].X, X[i].Y = elliptic.P256().ScalarBaseMult(tmp)
+		xx, xy := elliptic.P256().ScalarBaseMult(tmp)
+		X[i].X, X[i].Y = *xx, *xy
 	}
 
 	return types.DKGShareMessage{

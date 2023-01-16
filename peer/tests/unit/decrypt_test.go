@@ -3,7 +3,6 @@ package unit
 import (
 	"crypto/elliptic"
 	"fmt"
-	"go.dedis.ch/cs438/types"
 	"math/big"
 	"testing"
 
@@ -15,9 +14,12 @@ func Test_BSGS(t *testing.T) {
 	curve := elliptic.P256()
 
 	secret := new(big.Int).SetUint64(8)
-	targetPoint := types.Point{}
 
-	targetPoint.X, targetPoint.Y = curve.ScalarBaseMult(secret.Bytes())
+	tpX, tpY := curve.ScalarBaseMult(secret.Bytes())
+
+	targetPoint := impl.NewPoint(tpX, tpY)
+
+	// targetPoint.X, targetPoint.Y =
 
 	result, isFound := impl.BsgsFunction(&targetPoint, curve, 8)
 

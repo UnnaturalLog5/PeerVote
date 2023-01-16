@@ -93,7 +93,7 @@ func (n *node) Vote(electionID string, choiceID int) error {
 
 	// rPkPoint will act as a decryption share on the part of the voters
 	// In Decryption, the final mixnet server will have to access it in the ballot proof in order to do correct
-	rPkX, rPkY := elliptic.P256().ScalarMult(publicKey.X, publicKey.Y, rScalar.Bytes())
+	rPkX, rPkY := elliptic.P256().ScalarMult(&publicKey.X, &publicKey.Y, rScalar.Bytes())
 	rPkPoint := NewPoint(rPkX, rPkY)
 	correctEncProof, err := ProveDlogEq(rScalar.Bytes(), encryptedVote.Ct1, publicKey, rPkPoint, elliptic.P256())
 
@@ -179,13 +179,13 @@ func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProo
 		minusOne := new(big.Int).Sub(curve.Params().N, big.NewInt(1))
 
 		// Negate the before ciphertexts
-		negEncVoteBeforeCt1X, negEncVoteBeforeCt1Y := curve.ScalarMult(encVoteBefore.Ct1.X, encVoteBefore.Ct1.Y, minusOne.Bytes())
-		negEncVoteBeforeCt2X, negEncVoteBeforeCt2Y := curve.ScalarMult(encVoteBefore.Ct2.X, encVoteBefore.Ct2.Y, minusOne.Bytes())
+		negEncVoteBeforeCt1X, negEncVoteBeforeCt1Y := curve.ScalarMult(&encVoteBefore.Ct1.X, &encVoteBefore.Ct1.Y, minusOne.Bytes())
+		negEncVoteBeforeCt2X, negEncVoteBeforeCt2Y := curve.ScalarMult(&encVoteBefore.Ct2.X, &encVoteBefore.Ct2.Y, minusOne.Bytes())
 
-		DiffCt1X, DiffCt1Y := curve.Add(reencryptedVote.EncryptedVote.Ct1.X, reencryptedVote.EncryptedVote.Ct1.Y, negEncVoteBeforeCt1X, negEncVoteBeforeCt1Y)
+		DiffCt1X, DiffCt1Y := curve.Add(&reencryptedVote.EncryptedVote.Ct1.X, &reencryptedVote.EncryptedVote.Ct1.Y, negEncVoteBeforeCt1X, negEncVoteBeforeCt1Y)
 		DiffCt1Point := NewPoint(DiffCt1X, DiffCt1Y)
 
-		DiffCt2X, DiffCt2Y := curve.Add(reencryptedVote.EncryptedVote.Ct2.X, reencryptedVote.EncryptedVote.Ct2.Y, negEncVoteBeforeCt2X, negEncVoteBeforeCt2Y)
+		DiffCt2X, DiffCt2Y := curve.Add(&reencryptedVote.EncryptedVote.Ct2.X, &reencryptedVote.EncryptedVote.Ct2.Y, negEncVoteBeforeCt2X, negEncVoteBeforeCt2Y)
 		DiffCt2Point := NewPoint(DiffCt2X, DiffCt2Y)
 
 		// Mixnet needs to prove that reenecryption is done properly. This is also a proof of the correct decryption share.
@@ -261,10 +261,12 @@ func (n *node) Tally(electionID string, mixMessage types.MixMessage) {
 	votes := mixMessage.Votes
 	// Step 1: add all ct2's together; this aggregates all encrypted vote into "encrypted result"
 	electionResultX, electionResultY := votes[0].EncryptedVote.Ct2.X, votes[0].EncryptedVote.Ct2.Y
-	encResult := NewPoint(electionResultX, electionResultY)
+	encResult := NewPoint(&electionResultX, &electionResultY)
 	if len(votes) > 1 {
 		for i := 1; i < len(votes); i++ {
-			encResult.X, encResult.Y = curve.Add(encResult.X, encResult.Y, votes[i].EncryptedVote.Ct2.X, votes[i].EncryptedVote.Ct2.X)
+			encResultX, encResultY := curve.Add(&encResult.X, &encResult.Y, &votes[i].EncryptedVote.Ct2.X, &votes[i].EncryptedVote.Ct2.X)
+
+			encResult.X, encResult.Y = *encResultX, *encResultY
 		}
 	}
 
@@ -275,7 +277,8 @@ func (n *node) Tally(electionID string, mixMessage types.MixMessage) {
 		decryptShareX, decryptShareY := elliptic.UnmarshalCompressed(curve, decryptShareCompressed)
 		negDecryptShareX, negDecryptShareY := curve.ScalarMult(decryptShareX, decryptShareY, minusOne.Bytes())
 
-		encResult.X, encResult.Y = curve.Add(encResult.X, encResult.Y, negDecryptShareX, negDecryptShareY)
+		encResultX, encResultY := curve.Add(&encResult.X, &encResult.Y, negDecryptShareX, negDecryptShareY)
+		encResult.X, encResult.Y = *encResultX, *encResultY
 	}
 
 	// Step 3: Access all decryption shares of the voters
@@ -285,7 +288,8 @@ func (n *node) Tally(electionID string, mixMessage types.MixMessage) {
 		decryptShareX, decryptShareY := elliptic.UnmarshalCompressed(curve, decryptShareCompressed)
 		negDecryptShareX, negDecryptShareY := curve.ScalarMult(decryptShareX, decryptShareY, minusOne.Bytes())
 
-		encResult.X, encResult.Y = curve.Add(encResult.X, encResult.Y, negDecryptShareX, negDecryptShareY)
+		encResultX, encResultY := curve.Add(&encResult.X, &encResult.Y, negDecryptShareX, negDecryptShareY)
+		encResult.X, encResult.Y = *encResultX, *encResultY
 	}
 	// The actual vote count (the number of 1 votes) is the discrete log of the encResult
 	participantNum := len(votes)

@@ -26,7 +26,10 @@ func (n *node) PedersenDkg(election *types.Election) {
 	X := make([]types.Point, election.Base.Threshold+1)
 	for i := 0; i < len(a); i++ {
 		// X[i] = g^a[i]
-		X[i].X, X[i].Y = elliptic.P256().ScalarBaseMult(a[i].Bytes())
+		// X[i].X, X[i].Y = elliptic.P256().ScalarBaseMult(a[i].Bytes())
+
+		xix, xiy := elliptic.P256().ScalarBaseMult(a[i].Bytes())
+		X[i].X, X[i].Y = *xix, *xiy
 	}
 	f := func(id int) big.Int {
 		base := big.NewInt(int64(id))
@@ -242,7 +245,8 @@ func (n *node) HandleDKGShareValidationMessage(msg types.Message, pkt transport.
 		mixnetServerInfo.ComplainedCnt++
 		if mixnetServerInfo.ComplainedCnt > election.Base.Threshold {
 			mixnetServerInfo.QualifiedStatus = types.DISQUALIFIED
-			mixnetServerInfo.X[0].X, mixnetServerInfo.X[0].Y = elliptic.P256().ScalarBaseMult(make([]byte, 32))
+			XX, XY := elliptic.P256().ScalarBaseMult(make([]byte, 32))
+			mixnetServerInfo.X[0].X, mixnetServerInfo.X[0].Y = *XX, *XY
 			if n.ShouldSendElectionReadyMessage(election) {
 				n.dkgMutex.Unlock()
 				n.sendElectionReadyMessage(election)
@@ -343,9 +347,9 @@ func (n *node) HandleDKGRevealShareMessage(msg types.Message, pkt transport.Pack
 		if !isValid {
 
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].QualifiedStatus = types.DISQUALIFIED
+			XX, XY := elliptic.P256().ScalarBaseMult(make([]byte, 32))
 			election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].X,
-				election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].Y =
-				elliptic.P256().ScalarBaseMult(make([]byte, 32))
+				election.Base.MixnetServerInfos[dkgRevealShareMessage.MixnetServerID].X[0].Y = *XX, *XY
 			if n.ShouldSendElectionReadyMessage(election) {
 				n.dkgMutex.Unlock()
 				n.sendElectionReadyMessage(election)
@@ -577,7 +581,7 @@ func (n *node) VerifyEquation(j *big.Int, share *big.Int, X []types.Point, t int
 	productValX, productValY := elliptic.P256().ScalarBaseMult(make([]byte, 32))
 	for k := 0; k <= t; k++ {
 		exp := new(big.Int).Exp(j, big.NewInt(int64(k)), nil)
-		factorX, factorY := elliptic.P256().ScalarMult(X[k].X, X[k].Y, exp.Bytes())
+		factorX, factorY := elliptic.P256().ScalarMult(&X[k].X, &X[k].Y, exp.Bytes())
 		productValX, productValY = elliptic.P256().Add(factorX, factorY, productValX, productValY)
 	}
 	return leftSideX.Cmp(productValX) == 0 && leftSideY.Cmp(productValY) == 0
@@ -587,7 +591,7 @@ func (n *node) VerifyEquation(j *big.Int, share *big.Int, X []types.Point, t int
 func (n *node) ReconstructPublicKey(election *types.Election) types.Point {
 	productValX, productValY := elliptic.P256().ScalarBaseMult(make([]byte, 32))
 	for _, server := range election.Base.MixnetServerInfos {
-		productValX, productValY = elliptic.P256().Add(server.X[0].X, server.X[0].Y, productValX, productValY)
+		productValX, productValY = elliptic.P256().Add(&server.X[0].X, &server.X[0].Y, productValX, productValY)
 	}
 
 	return NewPoint(productValX, productValY)

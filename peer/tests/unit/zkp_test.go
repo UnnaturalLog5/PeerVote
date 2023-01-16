@@ -86,7 +86,7 @@ func Test_ZKP_DlogEq_True(t *testing.T) {
 
 	bPointOther := impl.NewPoint(bx, by)
 
-	pox, poy := elliptic.P256().ScalarMult(bPointOther.X, bPointOther.Y, secret)
+	pox, poy := elliptic.P256().ScalarMult(&bPointOther.X, &bPointOther.Y, secret)
 
 	pPointOther := impl.NewPoint(pox, poy)
 
@@ -121,7 +121,7 @@ func Test_ZKP_DlogEq_False(t *testing.T) {
 
 	bPointOther := impl.NewPoint(fx, fy)
 
-	pox, poy := curve.ScalarMult(bPointOther.X, bPointOther.Y, secret)
+	pox, poy := curve.ScalarMult(&bPointOther.X, &bPointOther.Y, secret)
 
 	pox, poy = curve.Add(pox, poy, curve.Params().Gx, curve.Params().Gy)
 
@@ -210,7 +210,7 @@ func Test_ZKP_DlogEqOr_True(t *testing.T) {
 
 	bPointOther := impl.NewPoint(box, boy)
 
-	pPointOtherX, bPointOtherY := curve.ScalarMult(bPointOther.X, bPointOther.Y, secret)
+	pPointOtherX, bPointOtherY := curve.ScalarMult(&bPointOther.X, &bPointOther.Y, secret)
 	pPointOther := impl.NewPoint(pPointOtherX, bPointOtherY)
 
 	secretBit := true
@@ -287,8 +287,8 @@ func Test_ZKP_ElGamalReEncryption(t *testing.T) {
 	pPoint := types.Point{}
 
 	_, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
-	pPoint.X = px
-	pPoint.Y = py
+	pPoint.X = *px
+	pPoint.Y = *py
 
 	if err != nil {
 		t.Errorf("Unexpected error, Key Generation failed: %v", err)
@@ -296,7 +296,7 @@ func Test_ZKP_ElGamalReEncryption(t *testing.T) {
 
 	fmt.Printf("Test_ZKP_ReEncryption: Generated keypair\n")
 
-	fmt.Printf("Test_ZKP_ReEncryption: Check if pPoint is on curve: %v\n", curve.IsOnCurve(pPoint.X, pPoint.Y))
+	fmt.Printf("Test_ZKP_ReEncryption: Check if pPoint is on curve: %v\n", curve.IsOnCurve(&pPoint.X, &pPoint.Y))
 
 	encScalar, err := cryptorand.Int(cryptorand.Reader, curveParams.N)
 	if err != nil {
@@ -313,7 +313,9 @@ func Test_ZKP_ElGamalReEncryption(t *testing.T) {
 	msgScalar := new(big.Int).SetBytes(msg)
 
 	msgPoint := types.Point{}
-	msgPoint.X, msgPoint.Y = curve.ScalarBaseMult(msg)
+	msgX, msgY := curve.ScalarBaseMult(msg)
+	msgPoint.X = *msgX
+	msgPoint.Y = *msgY
 
 	// fmt.Printf("Test_ZKP_ReEncryption: Check if msgPoint is on curve: %v\n", curve.IsOnCurve(msgPoint.X, msgPoint.Y))
 
@@ -328,13 +330,19 @@ func Test_ZKP_ElGamalReEncryption(t *testing.T) {
 	checkScalar = checkScalar.Mod(checkScalar, curveParams.N)
 
 	//ctCheck := impl.ElGamalCipherText{}
-	ctCheck01Point := types.Point{}
-	ctCheck01Point.X, ctCheck01Point.Y = curve.ScalarBaseMult(checkScalar.Bytes())
+
+	ctCheck01PointX, ctCheck01PointY := curve.ScalarBaseMult(checkScalar.Bytes())
+	ctCheck01Point := impl.NewPoint(ctCheck01PointX, ctCheck01PointY)
+
 	ctCheck02Point := types.Point{}
 
 	//ctCheck02Point.X, ctCheck02Point.Y = curve.ScalarMult(pPoint.X, pPoint.Y, checkScalar.Bytes())
-	ctCheck02Point.X, ctCheck02Point.Y = curve.ScalarMult(pPoint.X, pPoint.Y, checkScalar.Bytes())
-	ctCheck02Point.X, ctCheck02Point.Y = curve.Add(ctCheck02Point.X, ctCheck02Point.Y, msgPoint.X, msgPoint.Y)
+	// ctCheck02Point.X, ctCheck02Point.Y = curve.ScalarMult(&pPoint.X, &pPoint.Y, checkScalar.Bytes())
+	ctC02PX, ctC02PY := curve.ScalarMult(&pPoint.X, &pPoint.Y, checkScalar.Bytes())
+	ctCheck02Point.X, ctCheck02Point.Y = *ctC02PX, *ctC02PY
+
+	resX, resY := curve.Add(&ctCheck02Point.X, &ctCheck02Point.Y, &msgPoint.X, &msgPoint.Y)
+	ctCheck02Point.X, ctCheck02Point.Y = *resX, *resY
 
 	ctAfterCt01 := ctAfter.Ct1
 	ctAfterCt02 := ctAfter.Ct2
@@ -345,11 +353,11 @@ func Test_ZKP_ElGamalReEncryption(t *testing.T) {
 	// fmt.Printf("Test_ZKP_ReEncryption: ctCheck01Point is: (%v,%v)\n", ctCheck01Point.X, ctCheck01Point.Y)
 	// fmt.Printf("Test_ZKP_ReEncryption: ctCheck02Point is: (%v,%v)\n", ctCheck02Point.X, ctCheck02Point.Y)
 
-	require.Equal(t, 0, ctAfterCt01.X.Cmp(ctCheck01Point.X))
-	require.Equal(t, 0, ctAfterCt01.Y.Cmp(ctCheck01Point.Y))
+	require.Equal(t, 0, ctAfterCt01.X.Cmp(&ctCheck01Point.X))
+	require.Equal(t, 0, ctAfterCt01.Y.Cmp(&ctCheck01Point.Y))
 
-	require.Equal(t, 0, ctAfterCt02.X.Cmp(ctCheck02Point.X))
-	require.Equal(t, 0, ctAfterCt02.Y.Cmp(ctCheck02Point.Y))
+	require.Equal(t, 0, ctAfterCt02.X.Cmp(&ctCheck02Point.X))
+	require.Equal(t, 0, ctAfterCt02.Y.Cmp(&ctCheck02Point.Y))
 
 }
 
@@ -357,7 +365,7 @@ func Test_ZKP_Shuffle_Simple(t *testing.T) {
 	// Secret permutation for the proof
 	curve := elliptic.P256()
 	curveParams := curve.Params()
-	pPoint := types.Point{}
+
 	//var secret []byte
 	_, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
 
@@ -365,8 +373,7 @@ func Test_ZKP_Shuffle_Simple(t *testing.T) {
 		t.Errorf("Unexpected error, Key generation failed: %v", err)
 	}
 
-	pPoint.X = px
-	pPoint.Y = py
+	pPoint := impl.NewPoint(px, py)
 
 	permList := make([]uint32, 1)
 	permList[0] = 0
@@ -415,15 +422,13 @@ func Test_ZKP_Shuffle(t *testing.T) {
 	curve := elliptic.P256()
 	curveParams := curve.Params()
 
-	pPoint := types.Point{}
 	//var secret []byte
 	_, px, py, err := elliptic.GenerateKey(curve, cryptorand.Reader)
 	if err != nil {
 		t.Errorf("Unexpected error, Key generation failed: %v", err)
 	}
 
-	pPoint.X = px
-	pPoint.Y = py
+	pPoint := impl.NewPoint(px, py)
 
 	/*
 		permList := make([]uint32, 1)
@@ -523,9 +528,6 @@ func Test_ZKP_Shuffle(t *testing.T) {
 
 func Test_MarshalPointList(t *testing.T) {
 	curve := elliptic.P256()
-	aPoint := types.Point{}
-	bPoint := types.Point{}
-	cPoint := types.Point{}
 
 	one := make([]byte, 32)
 	one[31] = 1 //Scalar is 1
@@ -536,13 +538,17 @@ func Test_MarshalPointList(t *testing.T) {
 	three := make([]byte, 32)
 	three[31] = 3 //Scalar is 3
 
-	aPoint.X, aPoint.Y = curve.ScalarBaseMult(one)
-	bPoint.X, bPoint.Y = curve.ScalarBaseMult(two)
-	cPoint.X, cPoint.Y = curve.ScalarBaseMult(three)
+	apX, apY := curve.ScalarBaseMult(one)
+	bpX, bpY := curve.ScalarBaseMult(two)
+	cpX, cpY := curve.ScalarBaseMult(three)
 
-	aCompressed := elliptic.MarshalCompressed(curve, aPoint.X, aPoint.Y)
-	bCompressed := elliptic.MarshalCompressed(curve, bPoint.X, bPoint.Y)
-	cCompressed := elliptic.MarshalCompressed(curve, cPoint.X, cPoint.Y)
+	aPoint := impl.NewPoint(apX, apY)
+	bPoint := impl.NewPoint(bpX, bpY)
+	cPoint := impl.NewPoint(cpX, cpY)
+
+	aCompressed := elliptic.MarshalCompressed(curve, &aPoint.X, &aPoint.Y)
+	bCompressed := elliptic.MarshalCompressed(curve, &bPoint.X, &bPoint.Y)
+	cCompressed := elliptic.MarshalCompressed(curve, &cPoint.X, &cPoint.Y)
 
 	pointList := make([]types.Point, 3)
 	pointList[0] = aPoint
@@ -567,9 +573,9 @@ func Test_MarshalPointList(t *testing.T) {
 
 func Test_UnmarshalPointList(t *testing.T) {
 	curve := elliptic.P256()
-	aPoint := types.Point{}
-	bPoint := types.Point{}
-	cPoint := types.Point{}
+	// aPoint := types.Point{}
+	// bPoint := types.Point{}
+	// cPoint := types.Point{}
 
 	one := make([]byte, 32)
 	one[31] = 1 //Scalar is 1
@@ -580,9 +586,13 @@ func Test_UnmarshalPointList(t *testing.T) {
 	three := make([]byte, 32)
 	three[31] = 3 //Scalar is 3
 
-	aPoint.X, aPoint.Y = curve.ScalarBaseMult(one)
-	bPoint.X, bPoint.Y = curve.ScalarBaseMult(two)
-	cPoint.X, cPoint.Y = curve.ScalarBaseMult(three)
+	apX, apY := curve.ScalarBaseMult(one)
+	bpX, bpY := curve.ScalarBaseMult(two)
+	cpX, cpY := curve.ScalarBaseMult(three)
+
+	aPoint := impl.NewPoint(apX, apY)
+	bPoint := impl.NewPoint(bpX, bpY)
+	cPoint := impl.NewPoint(cpX, cpY)
 
 	pointList := make([]types.Point, 3)
 	pointList[0] = aPoint

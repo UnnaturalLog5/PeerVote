@@ -5,8 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"go.dedis.ch/cs438/types"
 	"math/big"
+
+	"go.dedis.ch/cs438/types"
 )
 
 func inList(element string, list []string) bool {
@@ -90,7 +91,7 @@ func findNonZeroIndex(list []uint32) int {
 func MarshalPointList(pointList []types.Point, curve elliptic.Curve) [][]byte {
 	bytePointList := make([][]byte, 0)
 	for _, p := range pointList {
-		pBytes := elliptic.MarshalCompressed(curve, p.X, p.Y)
+		pBytes := elliptic.MarshalCompressed(curve, &p.X, &p.Y)
 		bytePointList = append(bytePointList, pBytes)
 
 		// fmt.Printf("In MarshalPointList, Checking for entry %d, expected: %v\n", i, pBytes)
@@ -102,8 +103,9 @@ func MarshalPointList(pointList []types.Point, curve elliptic.Curve) [][]byte {
 func UnmarshalPointList(pointListBytes [][]byte, curve elliptic.Curve) []types.Point {
 	pointList := make([]types.Point, 0)
 	for _, p := range pointListBytes {
-		point := types.Point{}
-		point.X, point.Y = elliptic.UnmarshalCompressed(curve, p)
+
+		px, py := elliptic.UnmarshalCompressed(curve, p)
+		point := NewPoint(px, py)
 		pointList = append(pointList, point)
 	}
 
@@ -113,9 +115,9 @@ func UnmarshalPointList(pointListBytes [][]byte, curve elliptic.Curve) []types.P
 func MarshalElGamalList(ctList []types.ElGamalCipherText, curve elliptic.Curve) [][]byte {
 	bytePointList := make([][]byte, 0)
 	for _, ct := range ctList {
-		pBytes := elliptic.MarshalCompressed(curve, ct.Ct1.X, ct.Ct1.Y)
+		pBytes := elliptic.MarshalCompressed(curve, &ct.Ct1.X, &ct.Ct1.Y)
 		bytePointList = append(bytePointList, pBytes)
-		pBytesOther := elliptic.MarshalCompressed(curve, ct.Ct2.X, ct.Ct2.Y)
+		pBytesOther := elliptic.MarshalCompressed(curve, &ct.Ct2.X, &ct.Ct2.Y)
 		bytePointList = append(bytePointList, pBytesOther)
 	}
 
@@ -150,7 +152,7 @@ func MakeReencList(ctList []types.ElGamalCipherText) []types.Point {
 	pointList := make([]types.Point, 0)
 	for i := 0; i < len(ctList); i++ {
 		//fmt.Printf("In ProveShuffle,  is %v\n", ctMsgAfterList)
-		p := NewPoint(ctList[i].Ct1.X, ctList[i].Ct1.Y)
+		p := NewPoint(&ctList[i].Ct1.X, &ctList[i].Ct1.Y)
 		pointList = append(pointList, p)
 	}
 	return pointList
@@ -159,7 +161,7 @@ func MakeReencList(ctList []types.ElGamalCipherText) []types.Point {
 func MakeCtMsgList(ctList []types.ElGamalCipherText) []types.Point {
 	pointList := make([]types.Point, 0)
 	for i := 0; i < len(ctList); i++ {
-		p := NewPoint(ctList[i].Ct2.X, ctList[i].Ct2.Y)
+		p := NewPoint(&ctList[i].Ct2.X, &ctList[i].Ct2.Y)
 		pointList = append(pointList, p)
 	}
 	return pointList

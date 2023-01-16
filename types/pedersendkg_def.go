@@ -30,8 +30,8 @@ import (
 //}
 
 type Point struct {
-	X *big.Int
-	Y *big.Int
+	X big.Int
+	Y big.Int
 }
 
 type DKGShareMessage struct {
