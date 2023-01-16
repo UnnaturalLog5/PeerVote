@@ -140,6 +140,7 @@ func (n *node) Vote(electionID string, choiceID int) error {
 	mixnetServer := election.GetFirstQualifiedInitiator()
 	n.dkgMutex.Unlock()
 
+	log.Info().Str("peerAddr", n.myAddr).Msgf("sending  VoteMessage to mixnetSever %s", mixnetServer)
 	err = n.sendVoteMessage(mixnetServer, voteMessage)
 	if err != nil {
 		return err

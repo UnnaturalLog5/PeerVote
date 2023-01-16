@@ -55,6 +55,6 @@ type ShuffleProof struct {
 	WCapPointListBytes [][]byte
 	WCapPoint          []byte
 	SZeroScalar        big.Int
-	SList              []*big.Int
+	SList              []big.Int
 	DScalar            big.Int
 }
