@@ -72,7 +72,6 @@ func (n *node) GetElections() []*types.Election {
 	return elections
 }
 
-// todo vasilije vote async notify
 func (n *node) Vote(electionID string, choiceID int) error {
 	election := n.electionStore.Get(electionID)
 
@@ -222,7 +221,6 @@ func (n *node) Mix(electionID string, hop int, shuffleProofs []types.ShuffleProo
 		return err
 	}
 
-	// TODO: Changed order here
 	// get address for next hop
 	nextHop := election.GetNextMixHop(hop)
 
@@ -307,7 +305,6 @@ func (n *node) Tally(electionID string, mixMessage types.MixMessage) {
 	for _, choice := range election.Base.Choices {
 		count := uint(0)
 		//for _, vote := range votes {
-		// todo vasilije uncomment dis
 		//if vote == choice.ChoiceID {
 		count++
 		//}
@@ -328,5 +325,4 @@ func (n *node) Tally(electionID string, mixMessage types.MixMessage) {
 	}
 }
 
-// TODO: Make a Verify(election?) message which will putput string ->bool map, string is name of the proof, and bool is whether it passed or not
 // When I handle result message, save proofs into election, when you want to do display, then verify
